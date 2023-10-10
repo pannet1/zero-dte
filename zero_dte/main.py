@@ -5,5 +5,6 @@ if not brkr.authenticate():
     SystemExit(1)
 
 posn = brkr.positions
-if any(posn):
-    print(posn)
+
+for pos in posn:
+    print(pos)
