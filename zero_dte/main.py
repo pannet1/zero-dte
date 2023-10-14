@@ -47,7 +47,7 @@ class Mcx:
             df_ord = df_ord[df_ord['status'] == condtn]
             # Delete rows where 'symbol' is in the 'ignore' list
             df_ord = df_ord[~df_ord['symbol'].isin(setg['ignore'])]
-            print("orders \n", "df_ord)
+            print("orders \n", "df_ord")
         return df_ord
 
     @ staticmethod
