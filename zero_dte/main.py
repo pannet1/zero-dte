@@ -45,7 +45,6 @@ class Mcx:
             df_ord = df_ord[df_ord['exchange'] == 'MCX']
             condtn = ('OPEN' or 'TRIGGER_PENDING')
             df_ord = df_ord[df_ord['status'] == condtn]
-            # Delete rows where 'symbol' is in the 'ignore' list
             df_ord = df_ord[~df_ord['symbol'].isin(setg['ignore'])]
             print("orders \n", "df_ord")
         return df_ord
@@ -87,7 +86,7 @@ class Mcx:
         df_pos = cls.get_mcx_positions()
         if len(df_pos) > 0:
             df_pos.sort_values(by='rpnl', ascending=cls.sorting, inplace=True)
-            cls.sorting = True if cls.sorting else False
+            cls.sorting = False if cls.sorting else True
             first_row = df_pos.iloc[0]
             cls.close_positions(first_row)
 
