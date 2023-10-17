@@ -9,7 +9,7 @@ if not brkr.authenticate():
 Mcx.brkr = brkr
 while True:
     if (
-        (pdlm.now().time() > pdlm.time(23, 25)
+        (pdlm.now().time() > pdlm.time(23, 25))
         or (Mcx.get_mcx_m2m() < smcx['STOP'])
     ):
         Mcx.pack_and_go()
