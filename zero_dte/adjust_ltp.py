@@ -1,23 +1,30 @@
 import unittest
 
 
-def adjust_ltp(current_ltp, buffer_percentage, tick_size, dir=1):
-    # Calculate the buffer amount based on the percentage.
-    buffer_amount = (buffer_percentage / 100) * current_ltp
+def adjust_ltp(current_ltp, buffer_percentage, tick_size, dir):
+    try:
+        # Ensure current_ltp, buffer_percentage, and tick_size are numeric values
+        if not (isinstance(current_ltp, (int, float)) and
+                isinstance(buffer_percentage, (int, float)) and
+                isinstance(tick_size, (int, float))):
+            raise ValueError(
+                "Invalid input type. All inputs should be numeric.")
 
-    # Determine the adjustment direction (addition or subtraction).
-    if dir == 1:
-        adjusted_ltp = current_ltp + buffer_amount
-    elif dir == -1:
-        adjusted_ltp = current_ltp - buffer_amount
-    else:
-        raise ValueError(
-            "Invalid 'dir' value. Use 1 for addition or -1 for subtraction.")
+        # Calculate the buffer amount based on the percentage.
+        buffer_amount = (buffer_percentage / 100) * current_ltp
 
-    # Ensure the adjusted LTP aligns with the tick size.
-    adjusted_ltp = round(adjusted_ltp / tick_size) * tick_size
+        # Determine the adjustment direction (addition or subtraction).
+        if dir == 1:
+            adjusted_ltp = current_ltp + buffer_amount
+        elif dir == -1:
+            adjusted_ltp = current_ltp - buffer_amount
 
-    return adjusted_ltp
+        # Ensure the adjusted LTP aligns with the tick size.
+        adjusted_ltp = round(adjusted_ltp / tick_size) * tick_size
+        return adjusted_ltp
+    except Exception as e:
+        print(e)
+        return current_ltp  # Return the original LTP if an error occurs
 
 
 class TestAdjustLTP(unittest.TestCase):
