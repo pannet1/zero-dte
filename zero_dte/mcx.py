@@ -1,4 +1,4 @@
-from constants import logging, utls, setg
+from constants import logging, utls, smcx
 import pandas as pd
 from adjust_ltp import adjust_ltp
 
@@ -15,8 +15,7 @@ class Mcx:
             df_pos = df_pos[['symbol', 'exchange', 'prd', 'token', 'ti',
                             'quantity', 'urmtom', 'rpnl', 'last_price']]
             df_pos = df_pos[df_pos['exchange'] == 'MCX']
-            df_pos = df_pos[df_pos['quantity'] != 0]
-            df_pos = df_pos[~df_pos['symbol'].isin(setg['ignore'])]
+            df_pos = df_pos[~df_pos['symbol'].isin(smcx['IGNORE'])]
             print("positions \n", df_pos)
         return df_pos
 
@@ -41,7 +40,7 @@ class Mcx:
             df_ord = df_ord[df_ord['exchange'] == 'MCX']
             condtn = ('OPEN' or 'TRIGGER_PENDING')
             df_ord = df_ord[df_ord['status'] == condtn]
-            df_ord = df_ord[~df_ord['symbol'].isin(setg['ignore'])]
+            df_ord = df_ord[~df_ord['symbol'].isin(smcx['IGNORE'])]
             print("orders \n", "df_ord")
         return df_ord
 
@@ -65,7 +64,7 @@ class Mcx:
             order_type="LMT",
             symbol=row['symbol'],
             price=adjust_ltp(row['last_price'],
-                             setg['buff_per'], row['ti'], dir),
+                             smcx['BUFF_PERC'], row['ti'], dir),
             tag="zero_dte"
         )
         logging.debug(f"closing position {args}")
@@ -80,6 +79,7 @@ class Mcx:
             first_row = df_ord.iloc[0]
             cls.cancel_order(first_row)
         df_pos = cls.get_mcx_positions()
+        df_pos = df_pos[df_pos['quantity'] != 0]
         if len(df_pos) > 0:
             df_pos.sort_values(by='rpnl', ascending=cls.sorting, inplace=True)
             cls.sorting = False if cls.sorting else True
