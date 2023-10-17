@@ -1,4 +1,4 @@
-from constants import logging, utls, smcx
+from constants import logging, utls, smcx, print
 import pandas as pd
 from adjust_ltp import adjust_ltp
 
@@ -15,8 +15,11 @@ class Mcx:
             df_pos = df_pos[['symbol', 'exchange', 'prd', 'token', 'ti',
                             'quantity', 'urmtom', 'rpnl', 'last_price']]
             df_pos = df_pos[df_pos['exchange'] == 'MCX']
-            df_pos = df_pos[~df_pos['symbol'].isin(smcx['IGNORE'])]
-            print("positions \n", df_pos)
+            df_pos = df_pos[~df_pos['symbol'].isin(
+                smcx['IGNORE'])]
+            df_print = df_pos.drop(
+                ['exchange', 'prd', 'token', 'ti'], axis=1).set_index('symbol')
+            print("positions \n", df_print)
         return df_pos
 
     @ classmethod
@@ -25,8 +28,8 @@ class Mcx:
         df_pos = cls.get_mcx_positions()
         unrl = sum(df_pos['urmtom'].values)
         real = sum(df_pos['rpnl'].values)
-        totl = unrl + real
-        logging.info(f"total: {totl}")
+        totl = int(unrl + real)
+        print(f"total: {totl}")
         return totl
 
     @ classmethod

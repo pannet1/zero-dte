@@ -1,5 +1,5 @@
 from mcx import Mcx
-from constants import brkr, smcx, snse, logging
+from constants import brkr, smcx, logging
 import pendulum as pdlm
 
 if not brkr.authenticate():
@@ -14,4 +14,6 @@ while True:
     ):
         Mcx.pack_and_go()
     else:
-        print(f"time: {pdlm.now().time()} squareoff: {pdlm.time(23,25)}")
+
+        print(
+            f"time: {pdlm.now().format('HH:mm:ss')} squareoff: {pdlm.time(23,25)}")
