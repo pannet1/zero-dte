@@ -21,7 +21,9 @@ while True:
             Mcx.pack_and_go()
         else:
             print(
-                f"time: {pdlm.now().format('HH:mm:ss')} squareoff: {squareoff} ")
+                f"time: {pdlm.now().format('HH:mm:ss')}" +
+                "                                               " +
+                f"squareoff: {squareoff}")
     except Exception as e:
         # Handle the exception at the main loop level, e.g., log the error
         logging.error(f"An exception occurred in the main loop: {e}")

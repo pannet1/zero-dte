@@ -1,6 +1,17 @@
-from constants import logging, utls, smcx, print
+from constants import logging, utls, smcx, print, Console
 import pandas as pd
 from adjust_ltp import adjust_ltp
+
+
+class Regative:
+    def __init__(self, val):
+        self.val = val
+
+    def __rich__(self) -> str:
+        if self.val < 0:
+            return f"[bold red]{self.val}"
+        else:
+            return f"[bold green]{self.val}"
 
 
 class Mcx:
@@ -15,7 +26,7 @@ class Mcx:
             utls.slp_for(1)
             df_pos = pd.DataFrame(cls.brkr.positions)
 
-            if not df_pos or len(df_pos) == 0:
+            if df_pos is not None and len(df_pos) == 0:
                 return cls.mty
             else:
                 df_pos = df_pos[['symbol', 'exchange', 'prd', 'token', 'ti',
@@ -25,7 +36,7 @@ class Mcx:
                     smcx['IGNORE'])]
                 df_print = df_pos.drop(
                     ['exchange', 'prd', 'token', 'ti'], axis=1).set_index('symbol')
-                print("===       POSITIONS         === \n", df_print)
+                print(df_print)
                 return df_pos
         except Exception as e:
             raise
@@ -33,14 +44,15 @@ class Mcx:
     @ classmethod
     def get_mcx_m2m(cls):
         df_pos = cls.get_mcx_positions()
+        pretty = f"{62* ' '}"
         if len(df_pos) > 0:
             unrl = sum(df_pos['urmtom'].values)
             real = sum(df_pos['rpnl'].values)
             totl = int(unrl + real)
-            print(f"total: {totl}")
+            print(pretty, "TOTAL:", Regative(totl), "\n")
             return totl
         else:
-            print(f"no positions to STOP: {smcx['STOP']}")
+            print(pretty, "STOP:", smcx["STOP"], "\n")
             return 0
 
     @ classmethod
@@ -48,7 +60,7 @@ class Mcx:
         try:
             utls.slp_for(1)
             df_ord = pd.DataFrame(cls.brkr.orders)
-            if not df_ord or len(df_ord) == 0:
+            if df_ord is not None or len(df_ord) == 0:
                 return cls.mty
             else:
                 cols = ['order_id', 'exchange', 'symbol', 'quantity', 'side',
@@ -64,7 +76,7 @@ class Mcx:
             logging.warning(f"{e} while getting ORDERS")
             return cls.mty
 
-    @staticmethod
+    @ staticmethod
     def cancel_order(row):
         try:
             utls.slp_for(1)
@@ -82,6 +94,10 @@ class Mcx:
         try:
             utls.slp_for(0.5)
             dir = 1 if row['quantity'] < 0 else -1
+            buff = adjust_ltp(row['last_price'],
+                              smcx['BUFF_PERC'], row['ti'])
+            prc = row['last_price'] + \
+                buff if dir == 1 else row['last_price'] - buff
             args = dict(
                 side='B' if row['quantity'] < 0 else 'S',
                 product=row['prd'],
@@ -90,8 +106,7 @@ class Mcx:
                 disclosed_quantity=abs(row['quantity']),
                 order_type="LMT",
                 symbol=row['symbol'],
-                price=adjust_ltp(row['last_price'],
-                                 smcx['BUFF_PERC'], row['ti'], dir),
+                price=price,
                 tag="zero_dte"
             )
             logging.debug(f"closing position {args}")
@@ -108,10 +123,6 @@ class Mcx:
     @ classmethod
     def pack_and_go(cls):
         try:
-            df_ord = cls.get_mcx_orders()
-            if len(df_ord) > 0:
-                first_row = df_ord.iloc[0]
-                cls.cancel_order(first_row)
             df_pos = cls.get_mcx_positions()
             df_pos = df_pos[df_pos['quantity'] != 0]
             if len(df_pos) > 0:
@@ -120,5 +131,10 @@ class Mcx:
                 cls.sorting = False if cls.sorting else True
                 first_row = df_pos.iloc[0]
                 cls.close_positions(first_row)
+
+            df_ord = cls.get_mcx_orders()
+            if len(df_ord) > 0:
+                first_row = df_ord.iloc[0]
+                cls.cancel_order(first_row)
         except Exception as e:
             raise (e)
