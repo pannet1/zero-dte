@@ -4,7 +4,7 @@ import unittest
 from decimal import Decimal, ROUND_HALF_EVEN
 
 
-def round_to_paise(buy_price, buffer_percent=0.5, tick_size=0.05):
+def adjust_ltp(buy_price, buffer_percent=0.5, tick_size=0.05):
     buy_price_decimal = Decimal(str(buy_price))
     buffer_amount_decimal = buy_price_decimal * \
         (Decimal(str(buffer_percent)) / 100)
@@ -23,15 +23,15 @@ def round_to_paise(buy_price, buffer_percent=0.5, tick_size=0.05):
     return float(pending_order_price_rounded)
 
 
-class TestRoundToPaise(unittest.TestCase):
+class TestAdjustLtp(unittest.TestCase):
 
-    def test_round_to_paise(self):
+    def test_adjust_ltp(self):
         buy_price = 100.05
         buffer_percent = 2
         tick_size = 0.05
         expected_result = 98.05  # Adjusted buy price should be 100.5
 
-        result = round_to_paise(buy_price, -1*buffer_percent, tick_size)
+        result = adjust_ltp(buy_price, -1*buffer_percent, tick_size)
 
         self.assertAlmostEqual(result, expected_result, places=2)
 
