@@ -76,8 +76,8 @@ class Mcx:
             logging.warning(f"{e} while getting ORDERS")
             return cls.mty
 
-    @ staticmethod
-    def cancel_order(row):
+    @ classmethod
+    def cancel_order(cls, row):
         try:
             utls.slp_for(1)
             cls.brkr.order_cancel(row['order_id'])
@@ -89,15 +89,15 @@ class Mcx:
                 f"with {row['side']} {row['symbol']} "
             )
 
-    @staticmethod
-    def close_positions(row):
+    @classmethod
+    def close_positions(cls, row):
         try:
             utls.slp_for(0.5)
             dir = 1 if row['quantity'] < 0 else -1
-            buff = adjust_ltp(row['last_price'],
-                              smcx['BUFF_PERC'], row['ti'])
-            prc = row['last_price'] + \
-                buff if dir == 1 else row['last_price'] - buff
+            prc = adjust_ltp(row['last_price'],
+                             dir * smcx['BUFF_PERC'], row['ti'])
+            #prc = row['last_price'] + \
+            #   buff if dir == 1 else row['last_price'] - buff
             args = dict(
                 side='B' if row['quantity'] < 0 else 'S',
                 product=row['prd'],
@@ -106,19 +106,17 @@ class Mcx:
                 disclosed_quantity=abs(row['quantity']),
                 order_type="LMT",
                 symbol=row['symbol'],
-                price=price,
+                price=prc,
                 tag="zero_dte"
             )
-            logging.debug(f"closing position {args}")
             resp = cls.brkr.order_place(**args)
+            if resp:
+                logging.debug(f"{args}{resp}")
+            else:
+                logging.warning(f"closing position {args} with tick size: {row['ti']}")
         except Exception as e:
-            logging.error(f"{e} while placing order")
+            logging.error(f"{e} while closing positions")
 
-        if resp:
-            print(resp)
-        else:
-            logging.warning(
-                f"no reponse while trying to close {row['symbol']}")
 
     @ classmethod
     def pack_and_go(cls):
