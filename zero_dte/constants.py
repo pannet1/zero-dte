@@ -14,3 +14,5 @@ utls = Utilities()
 setg = fils.get_lst_fm_yml("settings.yml")
 smcx = setg['MCX']
 snse = setg['NSE']
+
+
