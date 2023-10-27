@@ -1,14 +1,17 @@
-from mcx import Mcx
-from constants import brkr, smcx, logging
+from stratergy.mcx import Mcx
+from omspy_brokers.finvasia import Finvasia
+from constants import smcx, snse, cnfg, logging
 import pendulum as pdlm
 
 
 def authenticate_and_initialize():
+    brkr = Finvasia(**cnfg)
     if not brkr.authenticate():
         logging.error("Failed to authenticate")
         SystemExit(1)
 
     Mcx.brkr = brkr
+    Mcx.smcx = smcx
     squareoff = pdlm.parse(smcx["SQUAREOFF"], fmt="HH:mm").time()
     return squareoff
 
