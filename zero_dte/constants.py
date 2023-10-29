@@ -12,3 +12,4 @@ cnfg = fils.get_lst_fm_yml(filepath + "finvasia_amar.yaml")
 settings = fils.get_lst_fm_yml(filepath + "settings.yml")
 smcx = settings["MCX"]
 snse = settings["NSE"]
+snse["PFOLIO"] = snse["PFOLIO_LAKHS"] * 100000
