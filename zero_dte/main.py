@@ -20,11 +20,12 @@ squareoff = authenticate_and_initialize()
 
 while True:
     try:
-        if (pdlm.now().time() > squareoff) or (Mcx.get_mcx_m2m() < smcx["STOP"]):
+        if (pdlm.now().time().add(hours=5, minutes=30) > squareoff) or 
+            (Mcx.get_mcx_m2m() < smcx["STOP"]):
             Mcx.pack_and_go()
         else:
             print(
-                f"time: {pdlm.now().format('HH:mm:ss')}"
+                f"time: {pdlm.now().add(hours=5, minutes=30).format('HH:mm:ss')}"
                 + f"                  {smcx['STOP']}                   "
                 + f"squareoff: {squareoff}"
             )
