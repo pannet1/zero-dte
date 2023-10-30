@@ -6,7 +6,7 @@ class Regative:
         self.val = val
 
     def __rich__(self) -> str:
-        if self.val < 0:
+        if isinstance(self.val, (int, float)) and self.val < 0:
             return f"[bold red]{self.val}"
         else:
             return f"[bold green]{self.val}"
@@ -15,4 +15,4 @@ class Regative:
 if __name__ == "__main__":
     from rich import print
 
-    print(Regative(-1))
+    print(Regative("a"))

@@ -1,9 +1,11 @@
 from toolkit.digits import Digits
+from toolkit.regative import Regative
 from time import sleep
 from rich import print
 from prettytable import PrettyTable
 from constants import snse
 from random import randint
+from copy import deepcopy
 
 
 def random_func(start, end):
@@ -11,18 +13,27 @@ def random_func(start, end):
     return randint(start, end)
 
 
+def _prettify(lst):
+    table = PrettyTable()
+    table.field_names = lst[0].keys()
+    for dct in lst:
+        table.add_row(dct.values())
+    print(table)
+
+
 def _update_metrics(**kwargs):
     positions = kwargs["positions"]
     for pos in positions:
         # TODO
         if pos["qty"] < 0:
-            pos["ltp"] = random_func(1, 100)
+            pos["ltp"] = random_func(1, 111)
         pos["value"] = abs(pos["qty"] * pos["ltp"])
         pos["m2m"] = (pos["ltp"] - pos["entry"]) * pos["qty"]
-
+    positions.sort(key=lambda x: x["value"], reverse=True)
+    kwargs["value"] = sum(pos["value"] for pos in positions if pos["qty"] < 0)
     kwargs["m2m"] = sum(pos["m2m"] for pos in positions)
-    kwargs["total_sell_positions"] = sum(
-        pos["qty"] for pos in positions if pos["qty"] < 0
+    kwargs["total_sell_positions"] = abs(
+        sum(pos["qty"] for pos in positions if pos["qty"] < 0)
     )
     kwargs["total_buy_positions"] = sum(
         pos["qty"] for pos in positions if pos["qty"] > 0
@@ -47,21 +58,128 @@ def _update_metrics(**kwargs):
     return kwargs
 
 
+def enter_options_with_hedge(**kwargs):
+    lotsize = 0
+    if kwargs.get("total_sell_positions", 0) < snse["MAX_QTY"]:
+        rough_total = snse["ENTRY_PERC"] / 100 * snse["MAX_QTY"]
+        lotsize = int(rough_total / snse["LOT_SIZE"]) * snse["LOT_SIZE"]
+
+    if lotsize > 0:
+        kwargs["last"] = "enter options with hedge"
+        is_positions = kwargs.get("positions", False)
+        if is_positions:
+            new_list = [
+                {
+                    "symbol": snse["SYMBOL"] + str(random_func(1, 5)) + "CE",
+                    "qty": -1 * lotsize,
+                    "ltp": snse["SEL_PREMIUM"],
+                    "entry": snse["SEL_PREMIUM"],
+                    "value": snse["SEL_PREMIUM"] * snse["LOT_SIZE"],
+                    "m2m": 0,
+                },
+                {
+                    "symbol": snse["SYMBOL"] + str(random_func(16, 20)) + "CE",
+                    "qty": lotsize,
+                    "ltp": snse["BUY_PREMIUM"],
+                    "entry": snse["BUY_PREMIUM"],
+                    "value": snse["BUY_PREMIUM"] * snse["LOT_SIZE"],
+                    "m2m": 0,
+                },
+                {
+                    "symbol": snse["SYMBOL"] + str(random_func(1, 5)) + "PE",
+                    "qty": -1 * lotsize,
+                    "ltp": snse["SEL_PREMIUM"],
+                    "entry": snse["SEL_PREMIUM"],
+                    "value": snse["SEL_PREMIUM"] * snse["LOT_SIZE"],
+                    "m2m": 0,
+                },
+                {
+                    "symbol": snse["SYMBOL"] + str(random_func(16, 20)) + "PE",
+                    "qty": lotsize,
+                    "ltp": snse["BUY_PREMIUM"],
+                    "entry": snse["BUY_PREMIUM"],
+                    "value": snse["BUY_PREMIUM"] * snse["LOT_SIZE"],
+                    "m2m": 0,
+                },
+            ]
+            # append new_list to is_positions list
+            is_positions += new_list
+        else:
+            kwargs["positions"] = [
+                {
+                    "symbol": snse["SYMBOL"] + str(random_func(1, 5)) + "CE",
+                    "qty": -1 * lotsize,
+                    "ltp": snse["SEL_PREMIUM"],
+                    "entry": snse["SEL_PREMIUM"],
+                    "value": snse["SEL_PREMIUM"] * snse["LOT_SIZE"],
+                    "m2m": 0,
+                },
+                {
+                    "symbol": snse["SYMBOL"] + str(random_func(16, 20)) + "CE",
+                    "qty": lotsize,
+                    "ltp": snse["BUY_PREMIUM"],
+                    "entry": snse["BUY_PREMIUM"],
+                    "value": snse["BUY_PREMIUM"] * snse["LOT_SIZE"],
+                    "m2m": 0,
+                },
+                {
+                    "symbol": snse["SYMBOL"] + str(random_func(1, 5)) + "PE",
+                    "qty": -1 * lotsize,
+                    "ltp": snse["SEL_PREMIUM"],
+                    "entry": snse["SEL_PREMIUM"],
+                    "value": snse["SEL_PREMIUM"] * snse["LOT_SIZE"],
+                    "m2m": 0,
+                },
+                {
+                    "symbol": snse["SYMBOL"] + str(random_func(16, 20)) + "PE",
+                    "qty": lotsize,
+                    "ltp": snse["BUY_PREMIUM"],
+                    "entry": snse["BUY_PREMIUM"],
+                    "value": snse["BUY_PREMIUM"] * snse["LOT_SIZE"],
+                    "m2m": 0,
+                },
+            ]
+    kwargs["fn"] = portfolio_conditions
+    return kwargs
+
+
 def portfolio_conditions(**kwargs):
+    kwargs["fn"] = set_trailing_mode
+    if kwargs["last"] == "enter options with hedge":
+        return kwargs
+
     increase = kwargs["highest"] - kwargs["lowest"]
     if kwargs["m2m"] > kwargs["total_positions"] * 2:
         kwargs["fn"] = enter_options_with_hedge
-        kwargs["txt"] = "entry positive portfolio"
     elif (increase > kwargs["total_positions"] * 5) and kwargs["m2m"] < 0:
         kwargs["fn"] = enter_options_with_hedge
-        kwargs["txt"] = "entry negative portfolio"
-    else:
-        kwargs["txt"] = "portfolio condtions"
-        kwargs["fn"] = set_trailing_mode
     return kwargs
 
 
 def set_trailing_mode(**kwargs):
+    def _exit_by_trail(**kwargs):
+        """
+        buy 20% of the positions value
+        starting from the highest ltp
+        """
+        print(kwargs["trailing"]["decline_perc"])
+        if kwargs["trailing"]["decline_perc"] > 0.1:
+            kwargs["last"] = "exit by trail"
+
+            # TODO
+            reduction_amount = 0.2 * kwargs["value"]
+            reduction_qty = int(reduction_amount / snse["LOT_SIZE"]) * snse["LOT_SIZE"]
+
+            positions = deepcopy(kwargs["positions"])
+            sell_pos = [pos for pos in positions if pos["qty"] < 0]
+            _prettify(sell_pos)
+            buy_pos = [pos for pos in positions if pos["qty"] > 0]
+            _prettify(buy_pos)
+
+        else:
+            kwargs["fn"] = enter_options_with_hedge
+        return kwargs
+
     if kwargs["profit_on_pfolio"] >= 0.5 and kwargs["decline_perc"] >= 1:
         trailing_stop = True
     else:
@@ -70,101 +188,15 @@ def set_trailing_mode(**kwargs):
     is_trailing = kwargs.get("trailing", False)
     if trailing_stop and not is_trailing:
         kwargs["trailing"] = {"highest": 0, "decline_perc": 0}
-        kwargs["txt"] = "trailing mode ON"
+        kwargs["last"] = "trailing mode ON"
     elif not trailing_stop and is_trailing:
         kwargs.pop("trailing")
-        kwargs["txt"] = "trailing mode OFF"
+        kwargs["last"] = "trailing mode OFF"
 
     if trailing_stop:
-        _exit_by_trail(**kwargs)
+        kwargs = _exit_by_trail(**kwargs)
     else:
-        kwargs["fn"] = portfolio_conditions
-    return kwargs
-
-
-def _exit_by_trail(**kwargs):
-    """
-    buy 20% of the positions value
-    starting from the highest ltp
-    """
-
-
-def enter_options_with_hedge(**kwargs):
-    is_positions = kwargs.get("positions", False)
-    if is_positions:
-        new_list = [
-            {
-                "symbol": "CE",
-                "qty": -1 * snse["LOT_SIZE"],
-                "ltp": snse["SEL_PREMIUM"],
-                "entry": snse["SEL_PREMIUM"],
-                "value": snse["SEL_PREMIUM"] * snse["LOT_SIZE"],
-                "m2m": 0,
-            },
-            {
-                "symbol": "CE",
-                "qty": snse["LOT_SIZE"],
-                "ltp": snse["BUY_PREMIUM"],
-                "entry": snse["BUY_PREMIUM"],
-                "value": snse["BUY_PREMIUM"] * snse["LOT_SIZE"],
-                "m2m": 0,
-            },
-            {
-                "symbol": "PE",
-                "qty": -1 * snse["LOT_SIZE"],
-                "ltp": snse["SEL_PREMIUM"],
-                "entry": snse["SEL_PREMIUM"],
-                "value": snse["SEL_PREMIUM"] * snse["LOT_SIZE"],
-                "m2m": 0,
-            },
-            {
-                "symbol": "PE",
-                "qty": snse["LOT_SIZE"],
-                "ltp": snse["BUY_PREMIUM"],
-                "entry": snse["BUY_PREMIUM"],
-                "value": snse["BUY_PREMIUM"] * snse["LOT_SIZE"],
-                "m2m": 0,
-            },
-        ]
-        # append new_list to is_positions list
-        is_positions += new_list
-    else:
-        kwargs["positions"] = [
-            {
-                "symbol": "CE",
-                "qty": -1 * snse["LOT_SIZE"],
-                "ltp": snse["SEL_PREMIUM"],
-                "entry": snse["SEL_PREMIUM"],
-                "value": snse["SEL_PREMIUM"] * snse["LOT_SIZE"],
-                "m2m": 0,
-            },
-            {
-                "symbol": "CE",
-                "qty": snse["LOT_SIZE"],
-                "ltp": snse["BUY_PREMIUM"],
-                "entry": snse["BUY_PREMIUM"],
-                "value": snse["BUY_PREMIUM"] * snse["LOT_SIZE"],
-                "m2m": 0,
-            },
-            {
-                "symbol": "PE",
-                "qty": -1 * snse["LOT_SIZE"],
-                "ltp": snse["SEL_PREMIUM"],
-                "entry": snse["SEL_PREMIUM"],
-                "value": snse["SEL_PREMIUM"] * snse["LOT_SIZE"],
-                "m2m": 0,
-            },
-            {
-                "symbol": "PE",
-                "qty": snse["LOT_SIZE"],
-                "ltp": snse["BUY_PREMIUM"],
-                "entry": snse["BUY_PREMIUM"],
-                "value": snse["BUY_PREMIUM"] * snse["LOT_SIZE"],
-                "m2m": 0,
-            },
-        ]
-    kwargs["txt"] = "entry options with hedge"
-    kwargs["fn"] = portfolio_conditions
+        kwargs["fn"] = enter_options_with_hedge
     return kwargs
 
 
@@ -184,5 +216,5 @@ while kwargs.get("fn", "PACK_AND_GO") != "PACK_AND_GO":
                 table.add_row(item.values())
             print(table)
         else:
-            print(f"{k}: {v}")
+            print(k, ":", Regative(v))
     sleep(1)
