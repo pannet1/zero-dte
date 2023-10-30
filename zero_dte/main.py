@@ -1,7 +1,8 @@
 from stratergy.mcx import Mcx
 from omspy_brokers.finvasia import Finvasia
-from constants import smcx, snse, cnfg, logging
+from constants import common, smcx, snse, cnfg, logging
 import pendulum as pdlm
+import traceback
 
 
 def authenticate_and_initialize():
@@ -20,18 +21,19 @@ squareoff = authenticate_and_initialize()
 
 while True:
     try:
-        if (pdlm.now().time().add(hours=5, minutes=30) > squareoff) or 
-            (Mcx.get_mcx_m2m() < smcx["STOP"]):
+        if (
+            pdlm.now().time().add(hours=common["h"], minutes=common["m"]) > squareoff
+        ) or (Mcx.get_mcx_m2m() < smcx["STOP"]):
             Mcx.pack_and_go()
         else:
             print(
-                f"time: {pdlm.now().add(hours=5, minutes=30).format('HH:mm:ss')}"
+                f"time: {pdlm.now().add(hours=common['h'], minutes=common['m']).format('HH:mm:ss')}"
                 + f"                  {smcx['STOP']}                   "
                 + f"squareoff: {squareoff}"
             )
     except Exception as e:
         # Handle the exception at the main loop level, e.g., log the error
-        logging.error(f"An exception occurred in the main loop: {e}")
-
+        logging.error(f"error ccurred in the main loop: {e}")
+        print(traceback.print_exc())
         # Re-authenticate and reinitialize
         squareoff = authenticate_and_initialize()
