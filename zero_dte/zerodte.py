@@ -6,6 +6,9 @@ from prettytable import PrettyTable
 from constants import snse
 from random import randint
 from copy import deepcopy
+from porfolio_manager import PortfolioManager
+
+pm = PortfolioManager()
 
 
 def random_func(start, end):
@@ -66,92 +69,62 @@ def enter_options_with_hedge(**kwargs):
 
     if lotsize > 0:
         kwargs["last"] = "enter options with hedge"
-        is_positions = kwargs.get("positions", False)
-        if is_positions:
-            new_list = [
-                {
-                    "symbol": snse["SYMBOL"] + str(random_func(1, 5)) + "CE",
-                    "qty": -1 * lotsize,
-                    "ltp": snse["SEL_PREMIUM"],
-                    "entry": snse["SEL_PREMIUM"],
-                    "value": snse["SEL_PREMIUM"] * snse["LOT_SIZE"],
-                    "m2m": 0,
-                },
-                {
-                    "symbol": snse["SYMBOL"] + str(random_func(16, 20)) + "CE",
-                    "qty": lotsize,
-                    "ltp": snse["BUY_PREMIUM"],
-                    "entry": snse["BUY_PREMIUM"],
-                    "value": snse["BUY_PREMIUM"] * snse["LOT_SIZE"],
-                    "m2m": 0,
-                },
-                {
-                    "symbol": snse["SYMBOL"] + str(random_func(1, 5)) + "PE",
-                    "qty": -1 * lotsize,
-                    "ltp": snse["SEL_PREMIUM"],
-                    "entry": snse["SEL_PREMIUM"],
-                    "value": snse["SEL_PREMIUM"] * snse["LOT_SIZE"],
-                    "m2m": 0,
-                },
-                {
-                    "symbol": snse["SYMBOL"] + str(random_func(16, 20)) + "PE",
-                    "qty": lotsize,
-                    "ltp": snse["BUY_PREMIUM"],
-                    "entry": snse["BUY_PREMIUM"],
-                    "value": snse["BUY_PREMIUM"] * snse["LOT_SIZE"],
-                    "m2m": 0,
-                },
-            ]
-            # append new_list to is_positions list
-            is_positions += new_list
-        else:
-            kwargs["positions"] = [
-                {
-                    "symbol": snse["SYMBOL"] + str(random_func(1, 5)) + "CE",
-                    "qty": -1 * lotsize,
-                    "ltp": snse["SEL_PREMIUM"],
-                    "entry": snse["SEL_PREMIUM"],
-                    "value": snse["SEL_PREMIUM"] * snse["LOT_SIZE"],
-                    "m2m": 0,
-                },
-                {
-                    "symbol": snse["SYMBOL"] + str(random_func(16, 20)) + "CE",
-                    "qty": lotsize,
-                    "ltp": snse["BUY_PREMIUM"],
-                    "entry": snse["BUY_PREMIUM"],
-                    "value": snse["BUY_PREMIUM"] * snse["LOT_SIZE"],
-                    "m2m": 0,
-                },
-                {
-                    "symbol": snse["SYMBOL"] + str(random_func(1, 5)) + "PE",
-                    "qty": -1 * lotsize,
-                    "ltp": snse["SEL_PREMIUM"],
-                    "entry": snse["SEL_PREMIUM"],
-                    "value": snse["SEL_PREMIUM"] * snse["LOT_SIZE"],
-                    "m2m": 0,
-                },
-                {
-                    "symbol": snse["SYMBOL"] + str(random_func(16, 20)) + "PE",
-                    "qty": lotsize,
-                    "ltp": snse["BUY_PREMIUM"],
-                    "entry": snse["BUY_PREMIUM"],
-                    "value": snse["BUY_PREMIUM"] * snse["LOT_SIZE"],
-                    "m2m": 0,
-                },
-            ]
+        pm.add_position(
+            {
+                "symbol": snse["SYMBOL"] + str(random_func(1, 5)) + "CE",
+                "qty": -1 * lotsize,
+                "ltp": snse["SEL_PREMIUM"],
+                "entry": snse["SEL_PREMIUM"],
+                "value": snse["SEL_PREMIUM"] * snse["LOT_SIZE"],
+                "m2m": 0,
+            }
+        )
+        pm.add_position(
+            {
+                "symbol": snse["SYMBOL"] + str(random_func(16, 20)) + "CE",
+                "qty": lotsize,
+                "ltp": snse["BUY_PREMIUM"],
+                "entry": snse["BUY_PREMIUM"],
+                "value": snse["BUY_PREMIUM"] * snse["LOT_SIZE"],
+                "m2m": 0,
+            }
+        )
+        pm.add_position(
+            {
+                "symbol": snse["SYMBOL"] + str(random_func(1, 5)) + "PE",
+                "qty": -1 * lotsize,
+                "ltp": snse["SEL_PREMIUM"],
+                "entry": snse["SEL_PREMIUM"],
+                "value": snse["SEL_PREMIUM"] * snse["LOT_SIZE"],
+                "m2m": 0,
+            }
+        )
+        pm.add_position(
+            {
+                "symbol": snse["SYMBOL"] + str(random_func(16, 20)) + "PE",
+                "qty": lotsize,
+                "ltp": snse["BUY_PREMIUM"],
+                "entry": snse["BUY_PREMIUM"],
+                "value": snse["BUY_PREMIUM"] * snse["LOT_SIZE"],
+                "m2m": 0,
+            }
+        )
+        kwargs["positions"] = pm.portfolio
+
     kwargs["fn"] = portfolio_conditions
     return kwargs
 
 
 def portfolio_conditions(**kwargs):
+    kwargs = _update_metrics(**kwargs)
     kwargs["fn"] = set_trailing_mode
     if kwargs["last"] == "enter options with hedge":
         return kwargs
 
     increase = kwargs["highest"] - kwargs["lowest"]
-    if kwargs["m2m"] > kwargs["total_positions"] * 2:
+    if kwargs["m2m"] > kwargs["total_sell_positions"] * 2:
         kwargs["fn"] = enter_options_with_hedge
-    elif (increase > kwargs["total_positions"] * 5) and kwargs["m2m"] < 0:
+    elif (increase > kwargs["total_sell_positions"] * 5) and kwargs["m2m"] < 0:
         kwargs["fn"] = enter_options_with_hedge
     return kwargs
 
@@ -162,22 +135,29 @@ def set_trailing_mode(**kwargs):
         buy 20% of the positions value
         starting from the highest ltp
         """
-        print(kwargs["trailing"]["decline_perc"])
         if kwargs["trailing"]["decline_perc"] > 0.1:
             kwargs["last"] = "exit by trail"
-
             # TODO
             reduction_amount = 0.2 * kwargs["value"]
             reduction_qty = int(reduction_amount / snse["LOT_SIZE"]) * snse["LOT_SIZE"]
-
+            print(f"{reduction_qty=} for {reduction_amount}")
             positions = deepcopy(kwargs["positions"])
-            sell_pos = [pos for pos in positions if pos["qty"] < 0]
-            _prettify(sell_pos)
             buy_pos = [pos for pos in positions if pos["qty"] > 0]
             _prettify(buy_pos)
-
-        else:
-            kwargs["fn"] = enter_options_with_hedge
+            sell_pos = [pos for pos in positions if pos["qty"] < 0]
+            _prettify(sell_pos)
+            buy_pm = PortfolioManager(buy_pos)
+            sell_pm = PortfolioManager(sell_pos)
+            for cover_result in sell_pm.adjust_positions(reduction_qty):
+                print(f"cover result: {cover_result}")
+                endswith = "CE" if cover_result["symbol"].endswith("CE") else "PE"
+                for sell_result in buy_pm.adjust_positions(
+                    -1 * cover_result["reduction_qty"], endswith=endswith
+                ):
+                    print("sell_result: ", sell_result)
+            kwargs.pop("trailing")
+            sleep(10)
+        kwargs["fn"] = enter_options_with_hedge
         return kwargs
 
     if kwargs["profit_on_pfolio"] >= 0.5 and kwargs["decline_perc"] >= 1:
@@ -202,8 +182,8 @@ def set_trailing_mode(**kwargs):
 
 kwargs = {}
 kwargs = enter_options_with_hedge(**kwargs)
+kwargs = _update_metrics(**kwargs)
 while kwargs.get("fn", "PACK_AND_GO") != "PACK_AND_GO":
-    kwargs = _update_metrics(**kwargs)
     next_function = kwargs.pop("fn")
     kwargs = next_function(**kwargs)
 
@@ -217,4 +197,4 @@ while kwargs.get("fn", "PACK_AND_GO") != "PACK_AND_GO":
             print(table)
         else:
             print(k, ":", Regative(v))
-    sleep(1)
+    sleep(0.5)
