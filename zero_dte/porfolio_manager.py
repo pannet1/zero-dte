@@ -3,15 +3,24 @@ class PortfolioManager:
         self.portfolio = lst_of_positions
 
     def add_position(self, position_dict):
-        symbol = position_dict["symbol"]
-        quantity = position_dict["qty"]
+        is_append = True
+        for entry in self.portfolio:
+            if entry["symbol"] == position_dict["symbol"]:
+                entry["qty"] += position_dict["qty"]
+                entry["m2m"] += position_dict["m2m"]
+                entry["rpl"] += position_dict["rpl"]
+                entry["ltp"] = position_dict["ltp"]
+                entry["value"] = position_dict["value"]
+                is_append = False
+                break
+        if is_append:
+            self.portfolio.append(position_dict)
 
+    def replace_position(self, position_dict):
+        symbol = position_dict["symbol"]
         for entry in self.portfolio:
             if entry["symbol"] == symbol:
-                entry["qty"] += quantity
-                break
-        else:
-            self.portfolio.append(position_dict)
+                entry = position_dict
 
     def adjust_positions(self, total_quantity, endswith=None):
         for entry in self.portfolio:
@@ -24,12 +33,19 @@ class PortfolioManager:
                 if total_quantity > 0:  # Buying
                     action_quantity = min(total_quantity, available_quantity)
                     entry["qty"] += action_quantity  # Buy
-                    entry["reduction_qty"] = action_quantity
                 else:  # Selling
                     action_quantity = min(abs(total_quantity), available_quantity)
                     entry["qty"] -= action_quantity  # Sell
                     total_quantity -= action_quantity
-                    entry["reduction_qty"] = action_quantity
+                entry["reduction_qty"] = action_quantity
+
+                # Calculate the ratio
+                ratio = action_quantity / available_quantity
+
+                # Adjust m2m and rpl
+                m2m_adjustment = entry["m2m"] * ratio
+                entry["m2m"] -= m2m_adjustment
+                entry["rpl"] += m2m_adjustment
                 yield entry
 
                 if total_quantity == 0:

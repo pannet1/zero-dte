@@ -25,6 +25,11 @@ while True:
             pdlm.now().time().add(hours=common["h"], minutes=common["m"]) > squareoff
         ) or (Mcx.get_mcx_m2m() < smcx["STOP"]):
             Mcx.pack_and_go()
+        elif (
+            pdlm.now().time().add(hours=common["h"], minutes=common["m"])
+            > pdlm.parse("23:40", fmt="HH:mm").time()
+        ):
+            systemExit(0)
         else:
             print(
                 f"time: {pdlm.now().add(hours=common['h'], minutes=common['m']).format('HH:mm:ss')}"
