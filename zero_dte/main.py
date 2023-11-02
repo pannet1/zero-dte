@@ -29,7 +29,7 @@ while True:
             pdlm.now().time().add(hours=common["h"], minutes=common["m"])
             > pdlm.parse("23:40", fmt="HH:mm").time()
         ):
-            systemExit(0)
+            SystemExit(0)
         else:
             print(
                 f"time: {pdlm.now().add(hours=common['h'], minutes=common['m']).format('HH:mm:ss')}"
