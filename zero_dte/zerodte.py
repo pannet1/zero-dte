@@ -1,11 +1,11 @@
-from toolkit.digits import Digits
 from toolkit.regative import Regative
 from time import sleep
 from rich import print
 from prettytable import PrettyTable
 from constants import snse
-from random import randint
 from porfolio_manager import PortfolioManager
+from random import randint
+from toolkit.digits import Digits
 
 pm = PortfolioManager()
 
@@ -15,6 +15,7 @@ def random_func(start, end):
     return randint(start, end)
 
 
+# TODO to be removed
 def _prettify(lst):
     if isinstance(lst, dict):
         lst = [lst]
@@ -25,69 +26,107 @@ def _prettify(lst):
     print(table)
 
 
-def pyramid(**kwargs):
-    kwargs["fn"] = portfolio_conditions
-    lotsize = 0
+def print_tables(**kwargs) -> dict:
+    for k, v in kwargs.items():
+        table = PrettyTable()
+        if isinstance(v, dict):
+            table.field_names = v.keys()
+            table.add_row(v.values())
+            print(table)
+        elif isinstance(v, list):
+            table.field_names = v[0].keys()
+            for item in v:
+                table.add_row(item.values())
+            print(table)
+        else:
+            print(k, ":", Regative(v))
+    print(25 * "=", " END OF REPORT ", 25 * "=", "\n")
+    sleep(1)
+    return kwargs
+
+
+def _calculate_allowable_quantity(**kwargs):
+    kwargs["lotsize"] = 0
     if (
         kwargs.get("quantity", "EMPTY") == "EMPTY"
         or kwargs["quantity"]["sell"] < snse["MAX_QTY"]
     ):
         rough_total = snse["ENTRY_PERC"] / 100 * snse["MAX_QTY"]
-        lotsize = int(rough_total / snse["LOT_SIZE"]) * snse["LOT_SIZE"]
+        kwargs["lotsize"] = int(rough_total / snse["LOT_SIZE"]) * snse["LOT_SIZE"]
+    return kwargs
 
-    if lotsize > 0:
-        kwargs["last"] = "pyramid complete"
-        pm.add_position(
-            {
-                "symbol": snse["SYMBOL"] + str(random_func(1, 5)) + "CE",
-                "qty": -1 * lotsize,
-                "ltp": snse["SEL_PREMIUM"],
-                "entry": snse["SEL_PREMIUM"],
-                "value": snse["SEL_PREMIUM"] * snse["LOT_SIZE"],
-                "m2m": 0,
-                "rpl": 0,
-            }
-        )
-        pm.add_position(
-            {
-                "symbol": snse["SYMBOL"] + str(random_func(16, 20)) + "CE",
-                "qty": lotsize,
-                "ltp": snse["BUY_PREMIUM"],
-                "entry": snse["BUY_PREMIUM"],
-                "value": snse["BUY_PREMIUM"] * snse["LOT_SIZE"],
-                "m2m": 0,
-                "rpl": 0,
-            }
-        )
-        pm.add_position(
-            {
-                "symbol": snse["SYMBOL"] + str(random_func(1, 5)) + "PE",
-                "qty": -1 * lotsize,
-                "ltp": snse["SEL_PREMIUM"],
-                "entry": snse["SEL_PREMIUM"],
-                "value": snse["SEL_PREMIUM"] * snse["LOT_SIZE"],
-                "m2m": 0,
-                "rpl": 0,
-            }
-        )
-        pm.add_position(
-            {
-                "symbol": snse["SYMBOL"] + str(random_func(16, 20)) + "PE",
-                "qty": lotsize,
-                "ltp": snse["BUY_PREMIUM"],
-                "entry": snse["BUY_PREMIUM"],
-                "value": snse["BUY_PREMIUM"] * snse["LOT_SIZE"],
-                "m2m": 0,
-                "rpl": 0,
-            }
-        )
-        kwargs["positions"] = pm.portfolio
+
+def _pyramid(**kwargs):
+    kwargs["last"] = "pyramid complete"
+    pm.add_position(
+        {
+            "symbol": snse["SYMBOL"] + str(random_func(1, 5)) + "CE",
+            "qty": -1 * kwargs["lotsize"],
+            "ltp": snse["SEL_PREMIUM"],
+            "entry": snse["SEL_PREMIUM"],
+            "value": snse["SEL_PREMIUM"] * snse["LOT_SIZE"],
+            "m2m": 0,
+            "rpl": 0,
+        }
+    )
+    pm.add_position(
+        {
+            "symbol": snse["SYMBOL"] + str(random_func(16, 20)) + "CE",
+            "qty": kwargs["lotsize"],
+            "ltp": snse["BUY_PREMIUM"],
+            "entry": snse["BUY_PREMIUM"],
+            "value": snse["BUY_PREMIUM"] * snse["LOT_SIZE"],
+            "m2m": 0,
+            "rpl": 0,
+        }
+    )
+    pm.add_position(
+        {
+            "symbol": snse["SYMBOL"] + str(random_func(1, 5)) + "PE",
+            "qty": -1 * kwargs["lotsize"],
+            "ltp": snse["SEL_PREMIUM"],
+            "entry": snse["SEL_PREMIUM"],
+            "value": snse["SEL_PREMIUM"] * snse["LOT_SIZE"],
+            "m2m": 0,
+            "rpl": 0,
+        }
+    )
+    pm.add_position(
+        {
+            "symbol": snse["SYMBOL"] + str(random_func(16, 20)) + "PE",
+            "qty": kwargs["lotsize"],
+            "ltp": snse["BUY_PREMIUM"],
+            "entry": snse["BUY_PREMIUM"],
+            "value": snse["BUY_PREMIUM"] * snse["LOT_SIZE"],
+            "m2m": 0,
+            "rpl": 0,
+        }
+    )
+    kwargs["positions"] = pm.portfolio
+    return kwargs
+
+
+def is_pyramid_condtion(**kwargs):
+    kwargs = update_metrics(**kwargs)
+    kwargs = _calculate_allowable_quantity(**kwargs)
+    kwargs["fn"] = is_trailing_cond
+
+    if kwargs["lotsize"] > 0 and (
+        kwargs["last"] != "attempt to pyramid" or kwargs["last"] != "pyramid complete"
+    ):
+        increase = kwargs["portfolio"]["highest"] - kwargs["portfolio"]["lowest"]
+        if kwargs["pnl"] > kwargs["quantity"]["sell"] * 2:
+            kwargs["last"] = "attempt to pyramid"
+            kwargs = _pyramid(**kwargs)
+        elif increase > kwargs["quantity"]["sell"] * 5 and kwargs["pnl"] < 0:
+            kwargs["last"] = "attempt to pyramid"
+            kwargs = _pyramid(**kwargs)
 
     return kwargs
 
 
-def _update_metrics(**kwargs):
-    positions = kwargs["positions"]
+def update_metrics(**kwargs):
+    positions = kwargs.get("positions", [])
     for pos in positions:
         # TODO
         if pos["qty"] < 0:
@@ -161,28 +200,16 @@ def _update_metrics(**kwargs):
     return kwargs
 
 
-def portfolio_conditions(**kwargs):
-    kwargs["fn"] = set_trailing_mode
-    if kwargs["last"] != "attempt to pyramid" or kwargs["last"] != "pyramid complete":
-        increase = kwargs["portfolio"]["highest"] - kwargs["portfolio"]["lowest"]
-        if kwargs["pnl"] > kwargs["quantity"]["sell"] * 2:
-            kwargs["last"] = "pyramid complete"
-            kwargs["fn"] = pyramid
-        elif increase > kwargs["quantity"]["sell"] * 5 and kwargs["pnl"] < 0:
-            kwargs["last"] = "pyramid complete"
-            kwargs["fn"] = pyramid
-    return kwargs
-
-
-def set_trailing_mode(**kwargs):
-    kwargs["fn"] = adjust_buy_to_cover
+# TODO should only return true or false
+def is_trailing_cond(**kwargs):
+    kwargs["fn"] = is_buy_to_cover
 
     def _exit_by_trail(**kwargs):
         """
         buy 20% of the positions sell value value
         starting from the high-est ltp
         """
-        kwargs["fn"] = adjust_buy_to_cover
+        kwargs["fn"] = is_buy_to_cover
         if kwargs["trailing"]["perc_decline"] > 0.1:
             kwargs["last"] = "exit by trail"
 
@@ -213,9 +240,7 @@ def set_trailing_mode(**kwargs):
                 pos.pop("reduction_qty")
                 # pm.replace_position(pos)
             pm.portfolio = kwargs["positions"] + zero_pos
-
             kwargs.pop("trailing")
-            sleep(10)
         return kwargs
 
     if kwargs["perc"]["on_pfolio"] >= 0.5 and kwargs["perc"]["decline"] >= 1:
@@ -236,8 +261,8 @@ def set_trailing_mode(**kwargs):
     return kwargs
 
 
-def adjust_buy_to_cover(**kwargs):
-    kwargs["fn"] = pyramid
+def is_buy_to_cover(**kwargs):
+    kwargs["fn"] = is_pyramid_condtion
     is_call_in_pos = any(
         pos["symbol"].endswith("CE")
         and pos["qty"] < 0
@@ -256,23 +281,12 @@ def adjust_buy_to_cover(**kwargs):
     return kwargs
 
 
-kwargs = {}
-kwargs = pyramid(**kwargs)
+kwargs = {"last": "Happy Trading"}
+kwargs = _calculate_allowable_quantity(**kwargs)
+kwargs = _pyramid(**kwargs)
+# we dont have fn key now, so add it
+kwargs["fn"] = is_pyramid_condtion
 while kwargs.get("fn", "PACK_AND_GO") != "PACK_AND_GO":
-    kwargs = _update_metrics(**kwargs)
-    next_function = kwargs.pop("fn")
-    kwargs = next_function(**kwargs)
-    for k, v in kwargs.items():
-        table = PrettyTable()
-        if isinstance(v, dict):
-            table.field_names = v.keys()
-            table.add_row(v.values())
-            print(table)
-        elif isinstance(v, list):
-            table.field_names = v[0].keys()
-            for item in v:
-                table.add_row(item.values())
-            print(table)
-        else:
-            print(k, ":", Regative(v))
-    sleep(0.5)
+    kwargs = print_tables(**kwargs)
+    next_func = kwargs.pop("fn")
+    kwargs = next_func(**kwargs)
