@@ -168,11 +168,13 @@ def update_metrics(**kwargs):
     )
 
     # percentages
-    on_pfolio = Digits.calc_perc(pnl, snse["PFOLIO"])
-    decline = Digits.calc_perc((highest - pnl), highest)
+    max_pfolio = Digits.calc_perc(highest, snse["PFOLIO"])
+    curr_pfolio = Digits.calc_perc(pnl, snse["PFOLIO"])
+    decline = max_pfolio - curr_pfolio
     kwargs["perc"] = dict(
         perc="perc",
-        on_pfolio=on_pfolio,
+        max_pfolio=max_pfolio,
+        curr_pfolio=curr_pfolio,
         decline=decline,
     )
 
@@ -258,7 +260,7 @@ def is_trailing_cond(**kwargs):
             kwargs.pop("trailing")
         return kwargs
 
-    if kwargs["perc"]["on_pfolio"] >= 0.5 and kwargs["perc"]["decline"] >= 1:
+    if kwargs["perc"]["curr_pfolio"] >= 0.5 and kwargs["perc"]["decline"] >= 1:
         trailing_stop = True
     else:
         trailing_stop = False
