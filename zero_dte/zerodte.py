@@ -10,9 +10,11 @@ from toolkit.digits import Digits
 pm = PortfolioManager()
 
 
-def random_func(start, end):
-    # return a random number
-    return randint(start, end)
+def simultp(ltp, speed, tick=0.05):
+    new_ltp = round(ltp + (randint(-1 * speed, speed) * tick), 2)
+    if new_ltp <= 0:
+        new_ltp = tick
+    return new_ltp
 
 
 # TODO to be removed
@@ -41,7 +43,6 @@ def print_tables(**kwargs) -> dict:
         else:
             print(k, ":", Regative(v))
     print(25 * "=", " END OF REPORT ", 25 * "=", "\n")
-    sleep(1)
     return kwargs
 
 
@@ -60,7 +61,7 @@ def _pyramid(**kwargs):
     kwargs["last"] = "pyramid complete"
     pm.add_position(
         {
-            "symbol": snse["SYMBOL"] + str(random_func(1, 5)) + "CE",
+            "symbol": snse["SYMBOL"] + str(randint(1, 5)) + "CE",
             "qty": -1 * kwargs["lotsize"],
             "ltp": snse["SEL_PREMIUM"],
             "entry": snse["SEL_PREMIUM"],
@@ -71,7 +72,7 @@ def _pyramid(**kwargs):
     )
     pm.add_position(
         {
-            "symbol": snse["SYMBOL"] + str(random_func(16, 20)) + "CE",
+            "symbol": snse["SYMBOL"] + str(randint(16, 20)) + "CE",
             "qty": kwargs["lotsize"],
             "ltp": snse["BUY_PREMIUM"],
             "entry": snse["BUY_PREMIUM"],
@@ -82,7 +83,7 @@ def _pyramid(**kwargs):
     )
     pm.add_position(
         {
-            "symbol": snse["SYMBOL"] + str(random_func(1, 5)) + "PE",
+            "symbol": snse["SYMBOL"] + str(randint(1, 5)) + "PE",
             "qty": -1 * kwargs["lotsize"],
             "ltp": snse["SEL_PREMIUM"],
             "entry": snse["SEL_PREMIUM"],
@@ -93,7 +94,7 @@ def _pyramid(**kwargs):
     )
     pm.add_position(
         {
-            "symbol": snse["SYMBOL"] + str(random_func(16, 20)) + "PE",
+            "symbol": snse["SYMBOL"] + str(randint(16, 20)) + "PE",
             "qty": kwargs["lotsize"],
             "ltp": snse["BUY_PREMIUM"],
             "entry": snse["BUY_PREMIUM"],
@@ -106,7 +107,7 @@ def _pyramid(**kwargs):
     return kwargs
 
 
-def is_pyramid_condtion(**kwargs):
+def is_pyramid_cond(**kwargs):
     kwargs = update_metrics(**kwargs)
     kwargs = _calculate_allowable_quantity(**kwargs)
     kwargs["fn"] = is_trailing_cond
@@ -130,9 +131,11 @@ def update_metrics(**kwargs):
     for pos in positions:
         # TODO
         if pos["qty"] < 0:
-            pos["ltp"] = random_func(1, 111)
-        pos["value"] = pos["qty"] * pos["ltp"]
-        pos["m2m"] = (pos["ltp"] - pos["entry"]) * pos["qty"]
+            pos["ltp"] = simultp(pos["ltp"], 25)
+        elif pos["qty"] > 0:
+            pos["ltp"] = simultp(pos["ltp"], 1)
+        pos["value"] = int(pos["qty"] * pos["ltp"])
+        pos["m2m"] = int((pos["ltp"] - pos["entry"]) * pos["qty"])
     positions.sort(key=lambda x: x["value"], reverse=False)
 
     # portfolio
@@ -175,6 +178,7 @@ def update_metrics(**kwargs):
 
     # trailing mode
     if kwargs.get("trailing", False):
+        kwargs["trailing"]["trailing"] = True
         kwargs["trailing"]["reset_high"] = max(pnl, kwargs["trailing"]["reset_high"])
         kwargs["trailing"]["perc_decline"] = Digits.calc_perc(
             (kwargs["trailing"]["reset_high"] - pnl),
@@ -182,13 +186,23 @@ def update_metrics(**kwargs):
         )
 
     # adjustment
-    call_value = sum(pos["value"] for pos in positions if pos["symbol"].endswith("CE"))
-    put_value = sum(pos["value"] for pos in positions if pos["symbol"].endswith("PE"))
+    call_value = sum(
+        pos["value"]
+        for pos in positions
+        if pos["symbol"].endswith("CE") and pos["qty"] < 0
+    )
+    put_value = sum(
+        pos["value"]
+        for pos in positions
+        if pos["symbol"].endswith("PE") and pos["qty"] < 0
+    )
     diff = call_value - put_value
     ratio = 0 if sell_value == 0 else diff / sell_value
-
+    adjust_mode = False
+    if kwargs.get("adjust", False):
+        adjust_mode = kwargs["adjust"]["adjust"]
     kwargs["adjust"] = dict(
-        adjust="adjust",
+        adjust=adjust_mode,
         call_value=call_value,
         put_value=put_value,
         diff=diff,
@@ -197,6 +211,7 @@ def update_metrics(**kwargs):
     )
 
     kwargs["pnl"] = pnl
+    sleep(3)
     return kwargs
 
 
@@ -262,7 +277,7 @@ def is_trailing_cond(**kwargs):
 
 
 def is_buy_to_cover(**kwargs):
-    kwargs["fn"] = is_pyramid_condtion
+    kwargs["fn"] = is_pyramid_cond
     is_call_in_pos = any(
         pos["symbol"].endswith("CE")
         and pos["qty"] < 0
@@ -277,6 +292,7 @@ def is_buy_to_cover(**kwargs):
             print(f"to be adjusted {buy_order}")
             for sell_order in pm.adjust_positions(-1 * adjusted_qty, endswith="CE"):
                 print(f"adjusted {sell_order}")
+        kwargs["adjust"]["adjust"] = True
         kwargs["last"] = "adjust mode ON"
     return kwargs
 
@@ -284,8 +300,8 @@ def is_buy_to_cover(**kwargs):
 kwargs = {"last": "Happy Trading"}
 kwargs = _calculate_allowable_quantity(**kwargs)
 kwargs = _pyramid(**kwargs)
-# we dont have fn key now, so add it
-kwargs["fn"] = is_pyramid_condtion
+# we dont have fn key till now, so add it
+kwargs["fn"] = is_pyramid_cond
 while kwargs.get("fn", "PACK_AND_GO") != "PACK_AND_GO":
     kwargs = print_tables(**kwargs)
     next_func = kwargs.pop("fn")
