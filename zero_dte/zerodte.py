@@ -6,6 +6,9 @@ from constants import snse
 from porfolio_manager import PortfolioManager
 from random import randint
 from toolkit.digits import Digits
+from rich.live import Live
+from rich.table import Table
+
 
 pm = PortfolioManager()
 
@@ -28,7 +31,32 @@ def _prettify(lst):
     print(table)
 
 
-def print_tables(**kwargs) -> dict:
+def richest(**kwargs):
+    def generate_table(dct) -> Table:
+        table = Table()
+        for key in dct:
+            table.add_column(key)
+        row_values = tuple()
+        for key, value in dct.items():
+            if isinstance(value, (int, float)) and value > 0:
+                color = "[green]"
+            elif isinstance(value, (int, float)):
+                color = "[red]"
+            else:
+                color = "[blue]"
+            colored = f"{color}{value}"
+            row_values += (colored,)
+        table.add_row(*row_values)
+        print(table)
+
+    for k, v in kwargs.items():
+        if isinstance(v, dict):
+            with Live(generate_table(v), refresh_per_second=1):
+                pass
+    return kwargs
+
+
+def prettier(**kwargs) -> dict:
     for k, v in kwargs.items():
         table = PrettyTable()
         if isinstance(v, dict):
@@ -107,6 +135,12 @@ def _pyramid(**kwargs):
     return kwargs
 
 
+def _reset_trailing(**kwargs):
+    kwargs["trailing"]["reset_high"] = 0
+    kwargs["trailing"]["decline"] = 0
+    return kwargs
+
+
 def is_pyramid_cond(**kwargs):
     kwargs = update_metrics(**kwargs)
     kwargs = _calculate_allowable_quantity(**kwargs)
@@ -139,7 +173,7 @@ def update_metrics(**kwargs):
     positions.sort(key=lambda x: x["value"], reverse=False)
 
     # portfolio
-    sell_value = abs(sum(pos["value"] for pos in positions if pos["qty"] < 0))
+    sell_value = sum(pos["value"] for pos in positions if pos["qty"] < 0)
     m2m = sum(pos["m2m"] for pos in positions)
     rpl = sum(pos["rpl"] for pos in positions)
     pnl = m2m + rpl
@@ -170,7 +204,7 @@ def update_metrics(**kwargs):
     # percentages
     max_pfolio = Digits.calc_perc(highest, snse["PFOLIO"])
     curr_pfolio = Digits.calc_perc(pnl, snse["PFOLIO"])
-    decline = max_pfolio - curr_pfolio
+    decline = round(max_pfolio - curr_pfolio, 2)
     kwargs["perc"] = dict(
         perc="perc",
         max_pfolio=max_pfolio,
@@ -178,13 +212,31 @@ def update_metrics(**kwargs):
         decline=decline,
     )
 
-    # trailing mode
-    if kwargs.get("trailing", False):
+    # trailing
+    if kwargs.get("trailing", "EMPTY") == "EMPTY":
+        kwargs["trailing"] = dict(trailing=False, reset_high=0, perc_decline=0)
+
+    if kwargs["perc"]["curr_pfolio"] >= 0.5 and kwargs["perc"]["decline"] >= 1:
+        trailing_stop = True
+    else:
+        trailing_stop = False
+
+    is_trailing = kwargs["trailing"]["trailing"]
+    if trailing_stop and not is_trailing:
         kwargs["trailing"]["trailing"] = True
-        kwargs["trailing"]["reset_high"] = max(pnl, kwargs["trailing"]["reset_high"])
-        kwargs["trailing"]["perc_decline"] = Digits.calc_perc(
-            (kwargs["trailing"]["reset_high"] - pnl),
-            kwargs["trailing"]["reset_high"],
+        kwargs = _reset_trailing(**kwargs)
+        kwargs["last"] = "trailing mode ON"
+    elif not trailing_stop and is_trailing:
+        kwargs["trailing"]["trailing"] = False
+        kwargs = _reset_trailing(**kwargs)
+        kwargs["last"] = "trailing mode OFF"
+
+    if trailing_stop:
+        kwargs["trailing"]["reset_high"] = max(
+            curr_pfolio, kwargs["trailing"]["reset_high"]
+        )
+        kwargs["trailing"]["perc_decline"] = (
+            kwargs["trailing"]["reset_high"] - curr_pfolio
         )
 
     # adjustment
@@ -226,7 +278,6 @@ def is_trailing_cond(**kwargs):
         buy 20% of the positions sell value value
         starting from the high-est ltp
         """
-        kwargs["fn"] = is_buy_to_cover
         if kwargs["trailing"]["perc_decline"] > 0.1:
             kwargs["last"] = "exit by trail"
 
@@ -257,23 +308,11 @@ def is_trailing_cond(**kwargs):
                 pos.pop("reduction_qty")
                 # pm.replace_position(pos)
             pm.portfolio = kwargs["positions"] + zero_pos
-            kwargs.pop("trailing")
+            kwargs = _reset_trailing(**kwargs)
         return kwargs
 
-    if kwargs["perc"]["curr_pfolio"] >= 0.5 and kwargs["perc"]["decline"] >= 1:
-        trailing_stop = True
-    else:
-        trailing_stop = False
-
-    is_trailing = kwargs.get("trailing", False)
-    if trailing_stop and not is_trailing:
-        kwargs["trailing"] = {"reset_high": 0, "perc_decline": 0}
-        kwargs["last"] = "trailing mode ON"
-    elif not trailing_stop and is_trailing:
-        kwargs.pop("trailing")
-        kwargs["last"] = "trailing mode OFF"
-
-    if trailing_stop:
+    # set values
+    if kwargs["trailing"]["trailing"]:
         kwargs = _exit_by_trail(**kwargs)
     return kwargs
 
@@ -305,6 +344,6 @@ kwargs = _pyramid(**kwargs)
 # we dont have fn key till now, so add it
 kwargs["fn"] = is_pyramid_cond
 while kwargs.get("fn", "PACK_AND_GO") != "PACK_AND_GO":
-    kwargs = print_tables(**kwargs)
+    kwargs = prettier(**kwargs)
     next_func = kwargs.pop("fn")
     kwargs = next_func(**kwargs)
