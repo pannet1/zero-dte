@@ -2,7 +2,7 @@ from toolkit.fileutils import Fileutils
 from toolkit.utilities import Utilities
 from toolkit.logger import Logger
 
-logging = Logger(10)
+logging = Logger(10, "debug.log")
 
 fils = Fileutils()
 utls = Utilities()

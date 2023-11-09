@@ -2,7 +2,7 @@ from toolkit.regative import Regative
 from time import sleep
 from rich import print
 from prettytable import PrettyTable
-from constants import snse
+from constants import snse, logging
 from porfolio_manager import PortfolioManager
 from random import randint
 from toolkit.digits import Digits
@@ -141,26 +141,7 @@ def _reset_trailing(**kwargs):
     return kwargs
 
 
-def is_pyramid_cond(**kwargs):
-    kwargs = update_metrics(**kwargs)
-    kwargs = _calculate_allowable_quantity(**kwargs)
-    kwargs["fn"] = is_trailing_cond
-
-    if kwargs["lotsize"] > 0 and (
-        kwargs["last"] != "attempt to pyramid" or kwargs["last"] != "pyramid complete"
-    ):
-        increase = kwargs["portfolio"]["highest"] - kwargs["portfolio"]["lowest"]
-        if kwargs["pnl"] > kwargs["quantity"]["sell"] * 2:
-            kwargs["last"] = "attempt to pyramid"
-            kwargs = _pyramid(**kwargs)
-        elif increase > kwargs["quantity"]["sell"] * 5 and kwargs["pnl"] < 0:
-            kwargs["last"] = "attempt to pyramid"
-            kwargs = _pyramid(**kwargs)
-
-    return kwargs
-
-
-def update_metrics(**kwargs):
+def _update_metrics(**kwargs):
     positions = kwargs.get("positions", [])
     for pos in positions:
         # TODO
@@ -214,24 +195,12 @@ def update_metrics(**kwargs):
 
     # trailing
     if kwargs.get("trailing", "EMPTY") == "EMPTY":
-        kwargs["trailing"] = dict(trailing=False, reset_high=0, perc_decline=0)
+        if kwargs["perc"]["curr_pfolio"] >= 0.5 and kwargs["perc"]["decline"] >= 1:
+            kwargs["trailing"] = {"trailing": True}
+            kwargs = _reset_trailing(**kwargs)
+            logging.debug(f"trailing stop:{curr_pfolio=}>0.5 and {decline=}>1 ")
 
-    if kwargs["perc"]["curr_pfolio"] >= 0.5 and kwargs["perc"]["decline"] >= 1:
-        trailing_stop = True
-    else:
-        trailing_stop = False
-
-    is_trailing = kwargs["trailing"]["trailing"]
-    if trailing_stop and not is_trailing:
-        kwargs["trailing"]["trailing"] = True
-        kwargs = _reset_trailing(**kwargs)
-        kwargs["last"] = "trailing mode ON"
-    elif not trailing_stop and is_trailing:
-        kwargs["trailing"]["trailing"] = False
-        kwargs = _reset_trailing(**kwargs)
-        kwargs["last"] = "trailing mode OFF"
-
-    if trailing_stop:
+    if kwargs.get("trailing", "EMPTY") != "EMPTY":
         kwargs["trailing"]["reset_high"] = max(
             curr_pfolio, kwargs["trailing"]["reset_high"]
         )
@@ -265,14 +234,31 @@ def update_metrics(**kwargs):
     )
 
     kwargs["pnl"] = pnl
-    sleep(3)
+    sleep(1)
+    return kwargs
+
+
+def is_pyramid_cond(**kwargs):
+    kwargs = _update_metrics(**kwargs)
+    kwargs = _calculate_allowable_quantity(**kwargs)
+    kwargs["fn"] = is_trailing_cond
+
+    if kwargs["lotsize"] > 0 and (
+        kwargs["last"] != "attempt to pyramid" or kwargs["last"] != "pyramid complete"
+    ):
+        increase = kwargs["portfolio"]["highest"] - kwargs["portfolio"]["lowest"]
+        if kwargs["pnl"] > kwargs["quantity"]["sell"] * 2:
+            kwargs["last"] = "attempt to pyramid"
+            kwargs = _pyramid(**kwargs)
+        elif increase > kwargs["quantity"]["sell"] * 5 and kwargs["pnl"] < 0:
+            kwargs["last"] = "attempt to pyramid"
+            kwargs = _pyramid(**kwargs)
+
     return kwargs
 
 
 # TODO should only return true or false
 def is_trailing_cond(**kwargs):
-    kwargs["fn"] = is_buy_to_cover
-
     def _exit_by_trail(**kwargs):
         """
         buy 20% of the positions sell value value
@@ -280,10 +266,16 @@ def is_trailing_cond(**kwargs):
         """
         if kwargs["trailing"]["perc_decline"] > 0.1:
             kwargs["last"] = "exit by trail"
-
-            reduction_amount = 0.2 * kwargs["portfolio"]["value"]
+            logging.debug(f' {kwargs["trailing"]["perc_decline"]} > 0.1 ')
+            reduction_amount = abs(0.2 * kwargs["portfolio"]["value"])
+            logging.debug(
+                f'{reduction_amount=}0.2 X value {kwargs["portfolio"]["value"]}'
+            )
             reduction_qty = int(reduction_amount / snse["LOT_SIZE"]) * snse["LOT_SIZE"]
-            print(f"{reduction_qty=} for {reduction_amount}")
+            logging.debug(
+                f"{reduction_qty =} for {reduction_amount=} "
+                + f'to the nearest lot{snse["LOT_SIZE"]}'
+            )
 
             positions = kwargs["positions"]
             buy_pos = [pos for pos in positions if pos["qty"] > 0]
@@ -292,27 +284,23 @@ def is_trailing_cond(**kwargs):
             _prettify(sell_pos)
             zero_pos = [pos for pos in positions if pos["qty"] == 0]
 
-            buy_pm = PortfolioManager(buy_pos)
             sell_pm = PortfolioManager(sell_pos)
             for cover_result in sell_pm.adjust_positions(reduction_qty):
-                print(f"cover result: {cover_result}")
-                endswith = "CE" if cover_result["symbol"].endswith("CE") else "PE"
-                for sell_result in buy_pm.adjust_positions(
-                    -1 * cover_result["reduction_qty"], endswith=endswith
-                ):
-                    print("sell_result: ", sell_result)
+                print(f"cover order: {cover_result}")
 
-            kwargs["positions"] = buy_pm.portfolio + sell_pm.portfolio
-            # delete all key value with key["reduction_qty"]
-            for pos in kwargs["positions"]:
+            other_pos = buy_pos + zero_pos
+            for pos in sell_pm.portfolio:
                 pos.pop("reduction_qty")
-                # pm.replace_position(pos)
-            pm.portfolio = kwargs["positions"] + zero_pos
+            kwargs["positions"] = sell_pm.portfolio + other_pos
+            print(kwargs["positions"])
+            pm.portfolio = kwargs["positions"]
             kwargs = _reset_trailing(**kwargs)
+            kwargs["fn"] = is_pyramid_cond
         return kwargs
 
     # set values
-    if kwargs["trailing"]["trailing"]:
+    kwargs["fn"] = is_buy_to_cover
+    if kwargs.get("trailing", "EMPTY") != "EMPTY":
         kwargs = _exit_by_trail(**kwargs)
     return kwargs
 
