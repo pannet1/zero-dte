@@ -11,6 +11,7 @@ from rich.table import Table
 
 
 pm = PortfolioManager()
+slp = 0.2
 
 
 def simultp(ltp, speed, tick=0.05):
@@ -137,7 +138,7 @@ def _pyramid(**kwargs):
 
 def _reset_trailing(**kwargs):
     kwargs["trailing"]["reset_high"] = 0
-    kwargs["trailing"]["decline"] = 0
+    kwargs["trailing"]["perc_decline"] = 0
     return kwargs
 
 
@@ -146,9 +147,9 @@ def _update_metrics(**kwargs):
     for pos in positions:
         # TODO
         if pos["qty"] < 0:
-            pos["ltp"] = simultp(pos["ltp"], 25)
+            pos["ltp"] = simultp(pos["ltp"], snse["SEL_PREMIUM"])
         elif pos["qty"] > 0:
-            pos["ltp"] = simultp(pos["ltp"], 1)
+            pos["ltp"] = simultp(pos["ltp"], snse["SEL_PREMIUM"] / 2)
         pos["value"] = int(pos["qty"] * pos["ltp"])
         pos["m2m"] = int((pos["ltp"] - pos["entry"]) * pos["qty"])
     positions.sort(key=lambda x: x["value"], reverse=False)
@@ -194,19 +195,25 @@ def _update_metrics(**kwargs):
     )
 
     # trailing
-    if kwargs.get("trailing", "EMPTY") == "EMPTY":
-        if kwargs["perc"]["curr_pfolio"] >= 0.5 and kwargs["perc"]["decline"] >= 1:
-            kwargs["trailing"] = {"trailing": True}
-            kwargs = _reset_trailing(**kwargs)
-            logging.debug(f"trailing stop:{curr_pfolio=}>0.5 and {decline=}>1 ")
 
-    if kwargs.get("trailing", "EMPTY") != "EMPTY":
+    if kwargs["perc"]["max_pfolio"] >= 0.5:
         kwargs["trailing"]["reset_high"] = max(
             curr_pfolio, kwargs["trailing"]["reset_high"]
         )
         kwargs["trailing"]["perc_decline"] = (
             kwargs["trailing"]["reset_high"] - curr_pfolio
         )
+
+        if (
+            not kwargs["trailing"]["trailing"]
+            and kwargs["trailing"]["perc_decline"] >= 1
+        ):
+            kwargs["trailing"]["trailing"] = True
+            logging.debug(
+                f"trailing :{max_pfolio=}>0.5 and "
+                + f"decline{kwargs['trailing']['perc_decline']} >= 1 "
+            )
+            kwargs = _reset_trailing(**kwargs)
 
     # adjustment
     call_value = sum(
@@ -234,7 +241,7 @@ def _update_metrics(**kwargs):
     )
 
     kwargs["pnl"] = pnl
-    sleep(1)
+    sleep(slp)
     return kwargs
 
 
@@ -269,14 +276,13 @@ def is_trailing_cond(**kwargs):
             logging.debug(f' {kwargs["trailing"]["perc_decline"]} > 0.1 ')
             reduction_amount = abs(0.2 * kwargs["portfolio"]["value"])
             logging.debug(
-                f'{reduction_amount=}0.2 X value {kwargs["portfolio"]["value"]}'
+                f'{reduction_amount=}= 0.2 X value {kwargs["portfolio"]["value"]}'
             )
-            reduction_qty = int(reduction_amount / snse["LOT_SIZE"]) * snse["LOT_SIZE"]
+            reduction_qty = int(reduction_amount / snse["LOT_SIZE"])
             logging.debug(
-                f"{reduction_qty =} for {reduction_amount=} "
+                f"{reduction_qty=} for {reduction_amount=} "
                 + f'to the nearest lot{snse["LOT_SIZE"]}'
             )
-
             positions = kwargs["positions"]
             buy_pos = [pos for pos in positions if pos["qty"] > 0]
             _prettify(buy_pos)
@@ -286,22 +292,26 @@ def is_trailing_cond(**kwargs):
 
             sell_pm = PortfolioManager(sell_pos)
             for cover_result in sell_pm.adjust_positions(reduction_qty):
-                print(f"cover order: {cover_result}")
+                logging.debug(f"cover order: {cover_result}")
 
             other_pos = buy_pos + zero_pos
             for pos in sell_pm.portfolio:
                 pos.pop("reduction_qty")
             kwargs["positions"] = sell_pm.portfolio + other_pos
-            print(kwargs["positions"])
+
             pm.portfolio = kwargs["positions"]
             kwargs = _reset_trailing(**kwargs)
+            # TODO
+        else:
             kwargs["fn"] = is_pyramid_cond
         return kwargs
 
     # set values
-    kwargs["fn"] = is_buy_to_cover
-    if kwargs.get("trailing", "EMPTY") != "EMPTY":
+    # kwargs["fn"] = is_buy_to_cover
+    if kwargs["trailing"]["trailing"]:
         kwargs = _exit_by_trail(**kwargs)
+    else:
+        kwargs["fn"] = is_pyramid_cond
     return kwargs
 
 
@@ -318,7 +328,7 @@ def is_buy_to_cover(**kwargs):
         total_qty = int(quantity / snse["LOT_SIZE"]) * snse["LOT_SIZE"]
         for buy_order in pm.adjust_positions(total_qty, endswith="CE"):
             adjusted_qty = buy_order.pop("adjusted_qty")
-            print(f"to be adjusted {buy_order}")
+            print(f"{adjusted_qty} to be adjusted {buy_order}")
             for sell_order in pm.adjust_positions(-1 * adjusted_qty, endswith="CE"):
                 print(f"adjusted {sell_order}")
         kwargs["adjust"]["adjust"] = True
@@ -326,7 +336,11 @@ def is_buy_to_cover(**kwargs):
     return kwargs
 
 
-kwargs = {"last": "Happy Trading"}
+kwargs = {
+    "last": "Happy Trading",
+    "trailing": {"trailing": False},
+}
+kwargs = _reset_trailing(**kwargs)
 kwargs = _calculate_allowable_quantity(**kwargs)
 kwargs = _pyramid(**kwargs)
 # we dont have fn key till now, so add it
