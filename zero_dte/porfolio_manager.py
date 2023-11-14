@@ -1,3 +1,6 @@
+# add typing with future compatablity
+
+
 class PortfolioManager:
     def __init__(self, lst_of_positions=[]):
         self.portfolio = lst_of_positions
@@ -22,7 +25,40 @@ class PortfolioManager:
             if entry["symbol"] == symbol:
                 entry = position_dict
 
-    def adjust_positions(self, total_quantity, endswith=None):
+    def adjust_value(self, value_to_reduce, endswith=None):
+        for entry in self.portfolio:
+            symbol = entry["symbol"]
+            opp_val = -1 * entry["value"]
+            opp_qty = -1 * entry["qty"]
+            entry["reduction_qty"] = 0
+            if (
+                value_to_reduce > 0
+                and (entry["value"] < 0 and value_to_reduce >= opp_val)
+            ) and (endswith is None or symbol.endswith(endswith)):
+                # sell to close
+                entry["qty"] = 0
+                entry["value"] = 0
+                value_to_reduce -= entry["value"]
+                entry["reduction_qty"] = opp_qty
+            elif (
+                value_to_reduce < 0
+                and (entry["value"] > 0 and value_to_reduce <= opp_val)
+            ) and (endswith is None or symbol.endswith(endswith)):
+                # buy to cover
+                entry["qty"] = 0
+                entry["value"] = 0
+                value_to_reduce -= entry["value"]
+                entry["reduction_qty"] = opp_qty
+
+            # Adjust m2m and rpl
+            entry["m2m"] = 0
+            entry["rpl"] += entry["m2m"]
+            yield entry
+
+            if value_to_reduce == 0:
+                break
+
+    def adjust_quantity(self, total_quantity, endswith=None):
         for entry in self.portfolio:
             symbol = entry["symbol"]
             if (
@@ -30,10 +66,11 @@ class PortfolioManager:
                 or (entry["qty"] < 0 and total_quantity > 0)
             ) and (endswith is None or symbol.endswith(endswith)):
                 available_quantity = abs(entry["qty"])
-                if total_quantity > 0:  # Buying
+                if total_quantity > 0:  # buying to cover
                     action_quantity = min(total_quantity, available_quantity)
                     entry["qty"] += action_quantity  # Buy
-                else:  # Selling
+                    total_quantity -= action_quantity
+                else:  # selling to close
                     action_quantity = min(abs(total_quantity), available_quantity)
                     entry["qty"] -= action_quantity  # Sell
                     total_quantity -= action_quantity
@@ -53,18 +90,28 @@ class PortfolioManager:
 
 
 if __name__ == "__main__":
+    from pprint import pprint
+
     # Example usage of the class with the updated adjust_positions method
     manager = PortfolioManager()
-    manager.add_position({"symbol": "NIFTY25APR17550CE", "qty": 50})
-    manager.add_position({"symbol": "NIFTY25APR17550CE", "qty": -500})
-    manager.add_position({"symbol": "NIFTY25APR17600PE", "qty": 20})
-
+    manager.add_position(
+        {"symbol": "NIFTY25APR17550CE", "qty": -50, "value": -500, "m2m": 20, "rpl": 20}
+    )
+    manager.add_position(
+        {"symbol": "NIFTY25APR17750CE", "qty": 0, "value": 0, "m2m": 20, "rpl": 20}
+    )
+    manager.add_position(
+        {
+            "symbol": "NIFTY25APR17650CE",
+            "qty": -200,
+            "value": -100,
+            "m2m": 20,
+            "rpl": 20,
+        }
+    )
+    pprint(manager.portfolio)
     # Positive total_to_adjust (buying)
-    total_to_adjust = 150
-    for entry in manager.adjust_positions(total_to_adjust, endswith="CE"):
-        print(f"{entry['action_quantity']}Q {entry['symbol']} bought")
-
-    # Negative total_to_adjust (selling)
-    total_to_adjust = -100
-    for entry in manager.adjust_positions(total_to_adjust, endswith="PE"):
-        print(f"{entry['action_quantity']}Q {entry['symbol']} sold")
+    total_to_adjust = 650
+    print(f"{total_to_adjust=}")
+    for entry in manager.adjust_value(total_to_adjust, endswith="CE"):
+        print(entry)

@@ -11,7 +11,7 @@ from rich.table import Table
 
 
 pm = PortfolioManager()
-slp = 0.2
+slp = 2
 
 
 def simultp(ltp, speed, tick=0.05):
@@ -195,7 +195,6 @@ def _update_metrics(**kwargs):
     )
 
     # trailing
-
     if kwargs["perc"]["max_pfolio"] >= 0.5:
         kwargs["trailing"]["reset_high"] = max(
             curr_pfolio, kwargs["trailing"]["reset_high"]
@@ -274,32 +273,15 @@ def is_trailing_cond(**kwargs):
         if kwargs["trailing"]["perc_decline"] > 0.1:
             kwargs["last"] = "exit by trail"
             logging.debug(f' {kwargs["trailing"]["perc_decline"]} > 0.1 ')
-            reduction_amount = abs(0.2 * kwargs["portfolio"]["value"])
+            value_to_reduce = 0.2 * kwargs["portfolio"]["value"]
             logging.debug(
-                f'{reduction_amount=}= 0.2 X value {kwargs["portfolio"]["value"]}'
+                f'{value_to_reduce=}= 0.2 X value {kwargs["portfolio"]["value"]}'
             )
-            reduction_qty = int(reduction_amount / snse["LOT_SIZE"])
-            logging.debug(
-                f"{reduction_qty=} for {reduction_amount=} "
-                + f'to the nearest lot{snse["LOT_SIZE"]}'
-            )
-            positions = kwargs["positions"]
-            buy_pos = [pos for pos in positions if pos["qty"] > 0]
-            _prettify(buy_pos)
-            sell_pos = [pos for pos in positions if pos["qty"] < 0]
-            _prettify(sell_pos)
-            zero_pos = [pos for pos in positions if pos["qty"] == 0]
-
-            sell_pm = PortfolioManager(sell_pos)
-            for cover_result in sell_pm.adjust_positions(reduction_qty):
-                logging.debug(f"cover order: {cover_result}")
-
-            other_pos = buy_pos + zero_pos
-            for pos in sell_pm.portfolio:
-                pos.pop("reduction_qty")
-            kwargs["positions"] = sell_pm.portfolio + other_pos
-
-            pm.portfolio = kwargs["positions"]
+            print("======== AFTER TRAIL ========")
+            for pos in pm.adjust_value(value_to_reduce, endswith="CE"):
+                print(pos)
+            _prettify(pm.portfolio)
+            kwargs["positions"] = pm.portfolio
             kwargs = _reset_trailing(**kwargs)
             # TODO
         else:
@@ -326,10 +308,10 @@ def is_buy_to_cover(**kwargs):
     if kwargs["adjust"]["ratio"] > snse["DIFF_THRESHOLD"] and is_call_in_pos:
         quantity = kwargs["adjust"]["amount"] / snse["ADJUST_BUY_PREMIUM"]
         total_qty = int(quantity / snse["LOT_SIZE"]) * snse["LOT_SIZE"]
-        for buy_order in pm.adjust_positions(total_qty, endswith="CE"):
+        for buy_order in pm.adjust_quantity(total_qty, endswith="CE"):
             adjusted_qty = buy_order.pop("adjusted_qty")
             print(f"{adjusted_qty} to be adjusted {buy_order}")
-            for sell_order in pm.adjust_positions(-1 * adjusted_qty, endswith="CE"):
+            for sell_order in pm.adjust_quantity(-1 * adjusted_qty, endswith="CE"):
                 print(f"adjusted {sell_order}")
         kwargs["adjust"]["adjust"] = True
         kwargs["last"] = "adjust mode ON"
