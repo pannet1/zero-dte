@@ -25,6 +25,41 @@ class PortfolioManager:
             if entry["symbol"] == symbol:
                 entry = position_dict
 
+    def trailing_stop(self, value_to_reduce, endswith, lotsize):
+        self.portfolio.sort(key=lambda x: x["ltp"], reverse=True)
+        for entry in self.portfolio:
+            opp_qty = entry["qty"] * -1
+            entry["reduced_qty"] = 0
+            if entry["symbol"].endswith(endswith) and entry["qty"] < 0:
+                # entry lot
+                entry_lot = abs(entry["qty"] / lotsize)
+                val_per_lot = entry["value"] / entry_lot
+                m2m_per_lot = entry["m2m"] / entry_lot
+                print(f"{entry_lot=}{val_per_lot=}")
+                # target lot from target value
+                target_lot = abs(int(value_to_reduce / val_per_lot))
+                print(f"{target_lot=}{value_to_reduce=}/{val_per_lot=}")
+                if entry_lot > target_lot:
+                    calculated = target_lot
+                    entry["reduced_qty"] = target_lot * lotsize
+                    print(f"reduced: {target_lot=}{lotsize=}")
+                else:
+                    calculated = entry_lot
+                    entry["reduced_qty"] = opp_qty
+                    print(f"reduced: {opp_qty=}")
+                entry["qty"] += entry["reduced_qty"]
+                entry["value"] += abs(calculated * val_per_lot)
+                m2m_for_this = m2m_per_lot * calculated
+                print(f"{m2m_for_this=} {m2m_per_lot=} * {calculated}")
+                entry["m2m"] -= m2m_for_this
+                entry["rpl"] += m2m_for_this
+                value_to_reduce += calculated * val_per_lot
+                print(f"final {value_to_reduce=}")
+
+            yield entry
+            if value_to_reduce == 0:
+                break
+
     def adjust_value(self, value_to_reduce, endswith=None):
         for entry in self.portfolio:
             symbol = entry["symbol"]
@@ -36,23 +71,23 @@ class PortfolioManager:
                 and (entry["value"] < 0 and value_to_reduce >= opp_val)
             ) and (endswith is None or symbol.endswith(endswith)):
                 # sell to close
+                value_to_reduce += entry["value"]
+                entry["reduction_qty"] = opp_qty
                 entry["qty"] = 0
                 entry["value"] = 0
-                value_to_reduce -= entry["value"]
-                entry["reduction_qty"] = opp_qty
             elif (
                 value_to_reduce < 0
                 and (entry["value"] > 0 and value_to_reduce <= opp_val)
             ) and (endswith is None or symbol.endswith(endswith)):
                 # buy to cover
+                value_to_reduce += entry["value"]
+                entry["reduction_qty"] = opp_qty
                 entry["qty"] = 0
                 entry["value"] = 0
-                value_to_reduce -= entry["value"]
-                entry["reduction_qty"] = opp_qty
 
             # Adjust m2m and rpl
-            entry["m2m"] = 0
             entry["rpl"] += entry["m2m"]
+            entry["m2m"] = 0
             yield entry
 
             if value_to_reduce == 0:

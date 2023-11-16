@@ -11,7 +11,7 @@ from rich.table import Table
 
 
 pm = PortfolioManager()
-slp = 2
+slp = 0.05
 
 
 def simultp(ltp, speed, tick=0.05):
@@ -143,7 +143,7 @@ def _reset_trailing(**kwargs):
 
 
 def _update_metrics(**kwargs):
-    positions = kwargs.get("positions", [])
+    positions = kwargs["positions"]
     for pos in positions:
         # TODO
         if pos["qty"] < 0:
@@ -273,15 +273,22 @@ def is_trailing_cond(**kwargs):
         if kwargs["trailing"]["perc_decline"] > 0.1:
             kwargs["last"] = "exit by trail"
             logging.debug(f' {kwargs["trailing"]["perc_decline"]} > 0.1 ')
-            value_to_reduce = 0.2 * kwargs["portfolio"]["value"]
+            value_to_reduce = int(-0.2 * kwargs["portfolio"]["value"] / 2)
             logging.debug(
-                f'{value_to_reduce=}= 0.2 X value {kwargs["portfolio"]["value"]}'
+                f'{value_to_reduce=}= -0.2 X value {kwargs["portfolio"]["value"]} / 2'
             )
+            print(f"INITIAL VALUE TO REDUCE: {value_to_reduce}")
             print("======== AFTER TRAIL ========")
-            for pos in pm.adjust_value(value_to_reduce, endswith="CE"):
+            pm.portfolio = kwargs["positions"]
+            for pos in pm.trailing_stop(value_to_reduce, endswith="CE", lotsize=50):
                 print(pos)
-            _prettify(pm.portfolio)
-            kwargs["positions"] = pm.portfolio
+            for pos in pm.trailing_stop(value_to_reduce, endswith="PE", lotsize=50):
+                print(pos)
+            kwargs["positions"] = [
+                {k: v for k, v in pos.items() if k != "reduced_qty"}
+                for pos in pm.portfolio
+            ]
+            _prettify(kwargs["positions"])
             kwargs = _reset_trailing(**kwargs)
             # TODO
         else:
