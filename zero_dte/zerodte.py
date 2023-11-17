@@ -280,10 +280,10 @@ def is_trailing_cond(**kwargs):
             print(f"INITIAL VALUE TO REDUCE: {value_to_reduce}")
             print("======== AFTER TRAIL ========")
             pm.portfolio = kwargs["positions"]
-            for pos in pm.trailing_stop(value_to_reduce, endswith="CE", lotsize=50):
-                print(pos)
-            for pos in pm.trailing_stop(value_to_reduce, endswith="PE", lotsize=50):
-                print(pos)
+            call_value_to_reduce = pm.trailing_full(value_to_reduce, endswith="CE")
+            print("call values to reduce:", call_value_to_reduce)
+            put_value_to_reduce = pm.trailing_full(value_to_reduce, endswith="PE")
+            print("put values to reduce:", put_value_to_reduce)
             kwargs["positions"] = [
                 {k: v for k, v in pos.items() if k != "reduced_qty"}
                 for pos in pm.portfolio

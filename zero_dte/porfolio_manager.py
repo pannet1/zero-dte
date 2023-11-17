@@ -25,7 +25,25 @@ class PortfolioManager:
             if entry["symbol"] == symbol:
                 entry = position_dict
 
-    def trailing_stop(self, value_to_reduce, endswith, lotsize):
+    def trailing_full(self, value_to_reduce, endswith):
+        self.portfolio.sort(key=lambda x: x["ltp"], reverse=True)
+
+        for entry in self.portfolio:
+            if (
+                entry["qty"] < 0
+                and value_to_reduce > 0
+                and entry["symbol"].endswith(endswith)
+            ):
+                value_to_reduce += entry["value"]
+                entry["value"] = 0
+                entry["rpl"] += entry["m2m"]
+                entry["m2m"] = 0
+                entry["reduced_qty"] = entry["qty"] * -1
+                entry["qty"] = 0
+
+        return value_to_reduce  # Return the resulting value_to_reduce in negative
+
+    def trailing_partial(self, value_to_reduce, endswith, lotsize):
         self.portfolio.sort(key=lambda x: x["ltp"], reverse=True)
         for entry in self.portfolio:
             opp_qty = entry["qty"] * -1
