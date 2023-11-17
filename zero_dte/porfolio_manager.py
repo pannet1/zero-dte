@@ -25,7 +25,7 @@ class PortfolioManager:
             if entry["symbol"] == symbol:
                 entry = position_dict
 
-    def trailing_full(self, value_to_reduce, endswith):
+    def trailing_full(self, value_to_reduce, endswith, lotsize):
         self.portfolio.sort(key=lambda x: x["ltp"], reverse=True)
 
         for entry in self.portfolio:
@@ -34,13 +34,34 @@ class PortfolioManager:
                 and value_to_reduce > 0
                 and entry["symbol"].endswith(endswith)
             ):
-                value_to_reduce += entry["value"]
-                entry["value"] = 0
-                entry["rpl"] += entry["m2m"]
-                entry["m2m"] = 0
-                entry["reduced_qty"] = entry["qty"] * -1
-                entry["qty"] = 0
+                # negative entry lot
+                entry_lot = entry["qty"] / lotsize
+                # positive value per entry lot
+                val_per_lot = entry["value"] / entry_lot
+                # postive target lot
+                target_lot = value_to_reduce / val_per_lot
+                print(f"{entry_lot=} {target_lot=} {val_per_lot=}")
 
+                calculated = int(abs(entry_lot) / target_lot) + 1
+                calculated = calculated if calculated <= entry_lot else 1
+                print(f"{calculated=} lot")
+
+                entry["reduced_qty"] = calculated * lotsize
+                entry["qty"] += entry["reduced_qty"]
+
+                # neutral m2m
+                m2m_per_lot = entry["m2m"] / abs(entry_lot)
+                m2m_for_this = m2m_per_lot * calculated
+                print(f"{m2m_for_this=} {m2m_per_lot=} * {calculated}")
+
+                entry["m2m"] -= m2m_for_this
+                entry["rpl"] += m2m_for_this
+
+                val_for_this = calculated * val_per_lot
+                entry["value"] += val_for_this
+                value_to_reduce -= val_for_this
+
+                print(f"final {value_to_reduce=}")
         return value_to_reduce  # Return the resulting value_to_reduce in negative
 
     def trailing_partial(self, value_to_reduce, endswith, lotsize):
