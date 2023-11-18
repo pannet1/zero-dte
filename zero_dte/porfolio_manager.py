@@ -43,11 +43,10 @@ class PortfolioManager:
                 # postive target lot
                 target_lot = math.ceil(value_to_reduce / entry["ltp"] / lotsize)
                 print(f"{entry_lot=} {target_lot=} {val_per_lot=}")
-
                 calculated = (
-                    target_lot if target_lot <= abs(entry_lot) and target_lot > 0 else 1
+                    abs(entry_lot) if target_lot > abs(entry_lot) else target_lot
                 )
-
+                calculated = 1 if calculated == 0 else calculated
                 print(f"{calculated=} lot")
 
                 entry["reduced_qty"] = calculated * lotsize
