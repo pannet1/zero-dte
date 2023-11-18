@@ -1,4 +1,5 @@
 # add typing with future compatablity
+import math
 
 
 class PortfolioManager:
@@ -40,7 +41,7 @@ class PortfolioManager:
                 # positive value per entry lot
                 val_per_lot = entry["value"] / entry_lot
                 # postive target lot
-                target_lot = round(value_to_reduce / entry["ltp"] / lotsize)
+                target_lot = math.ceil(value_to_reduce / entry["ltp"] / lotsize)
                 print(f"{entry_lot=} {target_lot=} {val_per_lot=}")
 
                 calculated = (
