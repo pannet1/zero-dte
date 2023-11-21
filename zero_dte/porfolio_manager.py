@@ -130,6 +130,19 @@ class PortfolioManager:
                 if total_quantity == 0:
                     break
 
+    def find_closest_premium(self, quotes, premium, endswith):
+        closest_symbol = None
+        closest_difference = float("inf")
+
+        for symbol, ltp in quotes.items():
+            if symbol.endswith(endswith):
+                difference = abs(ltp - premium)
+                if difference < closest_difference:
+                    closest_difference = difference
+                    closest_symbol = symbol
+
+        return closest_symbol
+
 
 if __name__ == "__main__":
     from pprint import pprint

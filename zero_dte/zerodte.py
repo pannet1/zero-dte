@@ -8,6 +8,7 @@ from random import randint
 from toolkit.digits import Digits
 from rich.live import Live
 from rich.table import Table
+import math
 
 
 pm = PortfolioManager()
@@ -137,8 +138,8 @@ def _pyramid(**kwargs):
 
 
 def _reset_trailing(**kwargs):
-    kwargs["trailing"]["reset_high"] = 0
-    kwargs["trailing"]["perc_decline"] = 0
+    kwargs["trailing"]["reset_high"] = -100
+    kwargs["trailing"]["perc_decline"] = -100
     return kwargs
 
 
@@ -204,10 +205,10 @@ def _update_metrics(**kwargs):
         )
 
         if (
-            not kwargs["trailing"]["trailing"]
+            kwargs["trailing"]["trailing"] == 0
             and kwargs["trailing"]["perc_decline"] >= 1
         ):
-            kwargs["trailing"]["trailing"] = True
+            kwargs["trailing"]["trailing"] = 1
             logging.debug(
                 f"trailing :{max_pfolio=}>0.5 and "
                 + f"decline{kwargs['trailing']['perc_decline']} >= 1 "
@@ -288,23 +289,77 @@ def is_trailing_cond(**kwargs):
                 value_to_reduce, endswith="PE", lotsize=50
             )
             print("put values to reduce:", put_value_to_reduce)
-            kwargs["positions"] = [
+            quotes = {
+                snse["SYMBOL"] + "6" + "CE": simultp(16, snse["SEL_PREMIUM"]),
+                snse["SYMBOL"] + "7" + "CE": simultp(17, snse["SEL_PREMIUM"]),
+                snse["SYMBOL"] + "8" + "CE": simultp(18, snse["SEL_PREMIUM"]),
+                snse["SYMBOL"] + "9" + "CE": simultp(19, snse["SEL_PREMIUM"]),
+                snse["SYMBOL"] + "10" + "CE": simultp(20, snse["SEL_PREMIUM"]),
+                snse["SYMBOL"] + "6" + "PE": simultp(16, snse["SEL_PREMIUM"]),
+                snse["SYMBOL"] + "7" + "PE": simultp(17, snse["SEL_PREMIUM"]),
+                snse["SYMBOL"] + "8" + "PE": simultp(18, snse["SEL_PREMIUM"]),
+                snse["SYMBOL"] + "9" + "PE": simultp(19, snse["SEL_PREMIUM"]),
+                snse["SYMBOL"] + "10" + "PE": simultp(20, snse["SEL_PREMIUM"]),
+            }
+            if call_value_to_reduce < 0:
+                symbol_name = pm.find_closest_premium(
+                    quotes, snse["SEL_PREMIUM"], endswith="CE"
+                )
+                lots = math.ceil(
+                    call_value_to_reduce / quotes[symbol_name] / snse["LOT_SIZE"]
+                )
+                print(f"sell {lots}fresh call {symbol_name} @ {quotes[symbol_name]}")
+                pm.add_position(
+                    {
+                        "symbol": symbol_name,
+                        "qty": lots * snse["LOT_SIZE"],
+                        "ltp": quotes[symbol_name],
+                        "entry": quotes[symbol_name],
+                        "value": quotes[symbol_name] * snse["LOT_SIZE"],
+                        "m2m": 0,
+                        "rpl": 0,
+                    }
+                )
+            if put_value_to_reduce < 0:
+                symbol_name = pm.find_closest_premium(
+                    quotes, snse["SEL_PREMIUM"], endswith="PE"
+                )
+                lots = math.ceil(
+                    put_value_to_reduce / quotes[symbol_name] / snse["LOT_SIZE"]
+                )
+                print(f"sell {lots}fresh put {symbol_name} @ {quotes[symbol_name]}")
+                pm.add_position(
+                    {
+                        "symbol": symbol_name,
+                        "qty": lots * snse["LOT_SIZE"],
+                        "ltp": quotes[symbol_name],
+                        "entry": quotes[symbol_name],
+                        "value": quotes[symbol_name] * snse["LOT_SIZE"],
+                        "m2m": 0,
+                        "rpl": 0,
+                    }
+                )
+            pm.portfolio = [
                 {k: v for k, v in pos.items() if k != "reduced_qty"}
                 for pos in pm.portfolio
             ]
+            kwargs["positions"] = pm.portfolio
             _prettify(kwargs["positions"])
             kwargs = _reset_trailing(**kwargs)
+            kwargs["trailing"]["trailing"] += 1
+            sleep(10)
             # TODO
-        else:
-            kwargs["fn"] = is_pyramid_cond
         return kwargs
 
     # set values
     # kwargs["fn"] = is_buy_to_cover
-    if kwargs["trailing"]["trailing"]:
+    kwargs["fn"] = is_pyramid_cond
+    if 0 < kwargs["trailing"]["trailing"] <= 5:
         kwargs = _exit_by_trail(**kwargs)
-    else:
-        kwargs["fn"] = is_pyramid_cond
+    elif kwargs["trailing"]["trailing"] == 6:
+        print("close all positions")
+        kwargs.pop("fn")
+
     return kwargs
 
 
@@ -331,7 +386,7 @@ def is_buy_to_cover(**kwargs):
 
 kwargs = {
     "last": "Happy Trading",
-    "trailing": {"trailing": False},
+    "trailing": {"trailing": 0},
 }
 kwargs = _reset_trailing(**kwargs)
 kwargs = _calculate_allowable_quantity(**kwargs)
