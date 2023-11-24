@@ -137,7 +137,7 @@ def _pyramid(**kwargs):
     return kwargs
 
 
-def _reset_trailing(**kwargs):
+def reset_trailing(**kwargs):
     kwargs["trailing"]["reset_high"] = -100
     kwargs["trailing"]["perc_decline"] = -100
     return kwargs
@@ -205,15 +205,15 @@ def _update_metrics(**kwargs):
         )
 
         if (
-            kwargs["trailing"]["trailing"] == 0
+            kwargs["trailing"]["trailing"] == -1
             and kwargs["trailing"]["perc_decline"] >= 1
         ):
-            kwargs["trailing"]["trailing"] = 1
+            kwargs["trailing"]["trailing"] = 0
             logging.debug(
                 f"trailing :{max_pfolio=}>0.5 and "
                 + f"decline{kwargs['trailing']['perc_decline']} >= 1 "
             )
-            kwargs = _reset_trailing(**kwargs)
+            kwargs = reset_trailing(**kwargs)
 
     # adjustment
     call_value = sum(
@@ -271,7 +271,9 @@ def is_trailing_cond(**kwargs):
         buy 20% of the positions sell value value
         starting from the high-est ltp
         """
-        if kwargs["trailing"]["perc_decline"] > 0.1:
+        if kwargs["trailing"]["perc_decline"] > 1 + (
+            kwargs["trailing"]["trailing"] * 0.1
+        ):
             kwargs["last"] = "exit by trail"
             logging.debug(f' {kwargs["trailing"]["perc_decline"]} > 0.1 ')
             value_to_reduce = int(-0.2 * kwargs["portfolio"]["value"] / 2)
@@ -345,7 +347,6 @@ def is_trailing_cond(**kwargs):
             ]
             kwargs["positions"] = pm.portfolio
             _prettify(kwargs["positions"])
-            kwargs = _reset_trailing(**kwargs)
             kwargs["trailing"]["trailing"] += 1
             sleep(10)
             # TODO
@@ -354,9 +355,9 @@ def is_trailing_cond(**kwargs):
     # set values
     # kwargs["fn"] = is_buy_to_cover
     kwargs["fn"] = is_pyramid_cond
-    if 0 < kwargs["trailing"]["trailing"] <= 5:
+    if kwargs["trailing"]["trailing"] <= 4:
         kwargs = _exit_by_trail(**kwargs)
-    elif kwargs["trailing"]["trailing"] == 6:
+    elif kwargs["trailing"]["trailing"] == 5:
         print("close all positions")
         kwargs.pop("fn")
 
@@ -386,9 +387,9 @@ def is_buy_to_cover(**kwargs):
 
 kwargs = {
     "last": "Happy Trading",
-    "trailing": {"trailing": 0},
+    "trailing": {"trailing": -1},
 }
-kwargs = _reset_trailing(**kwargs)
+kwargs = reset_trailing(**kwargs)
 kwargs = _calculate_allowable_quantity(**kwargs)
 kwargs = _pyramid(**kwargs)
 # we dont have fn key till now, so add it
