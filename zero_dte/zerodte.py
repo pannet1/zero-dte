@@ -12,7 +12,7 @@ import math
 
 
 pm = PortfolioManager()
-slp = 0.05
+slp = 10
 
 
 def simultp(ltp, speed, tick=0.05):
@@ -205,10 +205,10 @@ def _update_metrics(**kwargs):
         )
 
         if (
-            kwargs["trailing"]["trailing"] == -1
+            kwargs["trailing"]["trailing"] == 0
             and kwargs["trailing"]["perc_decline"] >= 1
         ):
-            kwargs["trailing"]["trailing"] = 0
+            kwargs["trailing"]["trailing"] = 1
             logging.debug(
                 f"trailing :{max_pfolio=}>0.5 and "
                 + f"decline{kwargs['trailing']['perc_decline']} >= 1 "
@@ -241,7 +241,7 @@ def _update_metrics(**kwargs):
     )
 
     kwargs["pnl"] = pnl
-    sleep(slp)
+    sleep(0.05)
     return kwargs
 
 
@@ -348,19 +348,20 @@ def is_trailing_cond(**kwargs):
             kwargs["positions"] = pm.portfolio
             _prettify(kwargs["positions"])
             kwargs["trailing"]["trailing"] += 1
-            sleep(10)
+            sleep(slp)
             # TODO
         return kwargs
 
     # set values
     # kwargs["fn"] = is_buy_to_cover
     kwargs["fn"] = is_pyramid_cond
-    if kwargs["trailing"]["trailing"] <= 4:
+    if 0 < kwargs["trailing"]["trailing"] <= 4:
         kwargs = _exit_by_trail(**kwargs)
     elif kwargs["trailing"]["trailing"] == 5:
-        print("close all positions")
-        kwargs.pop("fn")
-
+        if kwargs["trailing"]["perc_decline"] >= 1.5:
+            for pos in pm.close_positions():
+                print("order place", pos)
+            kwargs.pop("fn")
     return kwargs
 
 
@@ -387,7 +388,7 @@ def is_buy_to_cover(**kwargs):
 
 kwargs = {
     "last": "Happy Trading",
-    "trailing": {"trailing": -1},
+    "trailing": {"trailing": 0},
 }
 kwargs = reset_trailing(**kwargs)
 kwargs = _calculate_allowable_quantity(**kwargs)

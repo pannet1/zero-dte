@@ -26,6 +26,17 @@ class PortfolioManager:
             if entry["symbol"] == symbol:
                 entry = position_dict
 
+    def close_positions(self):
+        self.portfolio.sort(key=lambda x: x["ltp"], reverse=True)
+
+        for entry in self.portfolio:
+            if entry["qty"] != 0:
+                entry["rpl"] += entry["m2m"]
+                entry["m2m"] = 0
+                entry["reduced_qty"] = -1 * entry["qty"]
+                entry["qty"] = 0
+                yield entry
+
     def trailing_full(self, value_to_reduce, endswith, lotsize):
         self.portfolio.sort(key=lambda x: x["ltp"], reverse=True)
 
@@ -67,6 +78,7 @@ class PortfolioManager:
                 print(f"final {value_to_reduce=}")
         return value_to_reduce  # Return the resulting value_to_reduce in negative
 
+    """
     def adjust_value(self, value_to_reduce, endswith=None):
         for entry in self.portfolio:
             symbol = entry["symbol"]
@@ -129,6 +141,7 @@ class PortfolioManager:
 
                 if total_quantity == 0:
                     break
+    """
 
     def find_closest_premium(self, quotes, premium, endswith):
         closest_symbol = None
