@@ -11,7 +11,7 @@ from rich.table import Table
 import math
 
 
-pm = PortfolioManager()
+pm = PortfolioManager([], snse["LOT_SIZE"], snse["MAX_SOLD_LTP"])
 slp = 10
 
 
@@ -51,7 +51,7 @@ def richest(**kwargs):
         table.add_row(*row_values)
         print(table)
 
-    for k, v in kwargs.items():
+    for _, v in kwargs.items():
         if isinstance(v, dict):
             with Live(generate_table(v), refresh_per_second=1):
                 pass
@@ -148,7 +148,10 @@ def _update_metrics(**kwargs):
     for pos in positions:
         # TODO
         if pos["qty"] < 0:
-            pos["ltp"] = simultp(pos["ltp"], snse["SEL_PREMIUM"])
+            if pos["symbol"].endswith("CE"):
+                pos["ltp"] = simultp(pos["ltp"], snse["SEL_PREMIUM"] * 5)
+            else:
+                pos["ltp"] = simultp(pos["ltp"], snse["SEL_PREMIUM"])
         elif pos["qty"] > 0:
             pos["ltp"] = simultp(pos["ltp"], snse["SEL_PREMIUM"] / 2)
         pos["value"] = int(pos["qty"] * pos["ltp"])
@@ -236,12 +239,12 @@ def _update_metrics(**kwargs):
         call_value=call_value,
         put_value=put_value,
         diff=diff,
-        ratio=round(ratio, 2),
-        amount=round(ratio * snse["ADJUST_PERC"] / 100, 2),
+        ratio=round(ratio, 5),
+        amount=abs(int(diff * snse["ADJUST_PERC"] / 100)),
     )
 
     kwargs["pnl"] = pnl
-    sleep(0.05)
+    sleep(1)
     return kwargs
 
 
@@ -283,13 +286,9 @@ def is_trailing_cond(**kwargs):
             print(f"INITIAL VALUE TO REDUCE: {value_to_reduce}")
             print("======== AFTER TRAIL ========")
             pm.portfolio = kwargs["positions"]
-            call_value_to_reduce = pm.trailing_full(
-                value_to_reduce, endswith="CE", lotsize=50
-            )
+            call_value_to_reduce = pm.trailing_full(value_to_reduce, endswith="CE")
             print("call values to reduce:", call_value_to_reduce)
-            put_value_to_reduce = pm.trailing_full(
-                value_to_reduce, endswith="PE", lotsize=50
-            )
+            put_value_to_reduce = pm.trailing_full(value_to_reduce, endswith="PE")
             print("put values to reduce:", put_value_to_reduce)
             quotes = {
                 snse["SYMBOL"] + "6" + "CE": simultp(16, snse["SEL_PREMIUM"]),
@@ -341,48 +340,52 @@ def is_trailing_cond(**kwargs):
                         "rpl": 0,
                     }
                 )
-            pm.portfolio = [
-                {k: v for k, v in pos.items() if k != "reduced_qty"}
-                for pos in pm.portfolio
-            ]
-            kwargs["positions"] = pm.portfolio
+            kwargs["positions"] = pm.update()
             _prettify(kwargs["positions"])
+            kwargs["last"] = f'trailed level: {kwargs["trailing"]["trailing"]}'
             kwargs["trailing"]["trailing"] += 1
-            sleep(slp)
             # TODO
         return kwargs
 
     # set values
     # kwargs["fn"] = is_buy_to_cover
-    kwargs["fn"] = is_pyramid_cond
+    kwargs["fn"] = is_buy_to_cover
     if 0 < kwargs["trailing"]["trailing"] <= 4:
         kwargs = _exit_by_trail(**kwargs)
+    """
     elif kwargs["trailing"]["trailing"] == 5:
         if kwargs["trailing"]["perc_decline"] >= 1.5:
             for pos in pm.close_positions():
                 print("order place", pos)
-            kwargs.pop("fn")
+    """
     return kwargs
 
 
 def is_buy_to_cover(**kwargs):
     kwargs["fn"] = is_pyramid_cond
-    is_call_in_pos = any(
-        pos["symbol"].endswith("CE")
-        and pos["qty"] < 0
-        and pos["ltp"] > snse["MAX_SOLD_LTP"]
-        for pos in kwargs["positions"]
-    )
-    if kwargs["adjust"]["ratio"] > snse["DIFF_THRESHOLD"] and is_call_in_pos:
-        quantity = kwargs["adjust"]["amount"] / snse["ADJUST_BUY_PREMIUM"]
-        total_qty = int(quantity / snse["LOT_SIZE"]) * snse["LOT_SIZE"]
-        for buy_order in pm.adjust_quantity(total_qty, endswith="CE"):
-            adjusted_qty = buy_order.pop("adjusted_qty")
-            print(f"{adjusted_qty} to be adjusted {buy_order}")
-            for sell_order in pm.adjust_quantity(-1 * adjusted_qty, endswith="CE"):
-                print(f"adjusted {sell_order}")
+    pm.update(kwargs["positions"], "ltp")
+    if (
+        pm.is_above_highest_ltp("CE")
+        and kwargs["adjust"]["ratio"] >= snse["DIFF_THRESHOLD"]
+    ):
+        buy_entry = pm.adjust_highest_ltp(kwargs["adjust"]["amount"], endswith="CE")
+        print(f"{buy_entry=}")
+        kwargs["positions"] = pm.update()
         kwargs["adjust"]["adjust"] = True
         kwargs["last"] = "adjust mode ON"
+        sleep(slp)
+        kwargs.pop("fn")
+    elif (
+        pm.is_above_highest_ltp("PE")
+        and kwargs["adjust"]["ratio"] <= snse["DIFF_THRESHOLD"]
+    ):
+        sell_entry = pm.adjust_highest_ltp(kwargs["adjust"]["amount"], endswith="PE")
+        print(f"{sell_entry=}")
+        kwargs["positions"] = pm.update()
+        kwargs["adjust"]["adjust"] = True
+        kwargs["last"] = "adjust mode ON"
+        sleep(slp)
+        kwargs.pop("fn")
     return kwargs
 
 
