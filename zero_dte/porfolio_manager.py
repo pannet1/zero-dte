@@ -49,7 +49,7 @@ class PortfolioManager:
                 entry["qty"] = 0
                 yield entry
 
-    def trailing_full(self, value_to_reduce, endswith):
+    def reduce_value(self, value_to_reduce, endswith):
         self.portfolio.sort(key=lambda x: x["ltp"], reverse=True)
 
         for entry in self.portfolio:

@@ -286,9 +286,9 @@ def is_trailing_cond(**kwargs):
             print(f"INITIAL VALUE TO REDUCE: {value_to_reduce}")
             print("======== AFTER TRAIL ========")
             pm.portfolio = kwargs["positions"]
-            call_value_to_reduce = pm.trailing_full(value_to_reduce, endswith="CE")
+            call_value_to_reduce = pm.reduce_value(value_to_reduce, endswith="CE")
             print("call values to reduce:", call_value_to_reduce)
-            put_value_to_reduce = pm.trailing_full(value_to_reduce, endswith="PE")
+            put_value_to_reduce = pm.reduce_value(value_to_reduce, endswith="PE")
             print("put values to reduce:", put_value_to_reduce)
             quotes = {
                 snse["SYMBOL"] + "6" + "CE": simultp(16, snse["SEL_PREMIUM"]),
@@ -348,8 +348,8 @@ def is_trailing_cond(**kwargs):
         return kwargs
 
     # set values
-    # kwargs["fn"] = is_buy_to_cover
-    kwargs["fn"] = is_buy_to_cover
+    # kwargs["fn"] = is_pyramid_cond
+    kwargs["fn"] = adjust_highest
     if 0 < kwargs["trailing"]["trailing"] <= 4:
         kwargs = _exit_by_trail(**kwargs)
     """
@@ -361,8 +361,8 @@ def is_trailing_cond(**kwargs):
     return kwargs
 
 
-def is_buy_to_cover(**kwargs):
-    kwargs["fn"] = is_pyramid_cond
+def adjust_highest(**kwargs):
+    kwargs["fn"] = adjust_detoriation
     pm.update(kwargs["positions"], "ltp")
     if (
         pm.is_above_highest_ltp("CE")
@@ -374,10 +374,9 @@ def is_buy_to_cover(**kwargs):
         kwargs["adjust"]["adjust"] = True
         kwargs["last"] = "adjust mode ON"
         sleep(slp)
-        kwargs.pop("fn")
     elif (
         pm.is_above_highest_ltp("PE")
-        and kwargs["adjust"]["ratio"] <= snse["DIFF_THRESHOLD"]
+        and kwargs["adjust"]["ratio"] <= snse["DIFF_THRESHOLD"] * -1
     ):
         sell_entry = pm.adjust_highest_ltp(kwargs["adjust"]["amount"], endswith="PE")
         print(f"{sell_entry=}")
@@ -385,7 +384,21 @@ def is_buy_to_cover(**kwargs):
         kwargs["adjust"]["adjust"] = True
         kwargs["last"] = "adjust mode ON"
         sleep(slp)
-        kwargs.pop("fn")
+    return kwargs
+
+
+def adjust_detoriation(**kwargs):
+    kwargs["fn"] = is_pyramid_cond
+    if kwargs["perc"]["decline"] > 2.5:
+        sleep(slp)
+        if kwargs["adjust"]["ratio"] >= snse["DIFF_THRESHOLD"]:
+            pm.reduce_value(kwargs["adjust"]["amount"], endswith="CE")
+            kwargs["last"] = "adjust_detoriation"
+            kwargs.pop("fn")
+        elif kwargs["adjust"]["ratio"] <= snse["DIFF_THRESHOLD"] * -1:
+            pm.reduce_value(kwargs["adjust"]["amount"], endswith="PE")
+            kwargs["last"] = "adjust_detoriation"
+            kwargs.pop("fn")
     return kwargs
 
 
