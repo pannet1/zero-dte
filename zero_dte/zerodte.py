@@ -191,11 +191,15 @@ def _update_metrics(**kwargs):
     max_pfolio = Digits.calc_perc(highest, snse["PFOLIO"])
     curr_pfolio = Digits.calc_perc(pnl, snse["PFOLIO"])
     decline = round(max_pfolio - curr_pfolio, 2)
+    min_pfolio = Digits.calc_perc(lowest, snse["PFOLIO"])
+    improve = round(curr_pfolio - min_pfolio, 2)
     kwargs["perc"] = dict(
         perc="perc",
         max_pfolio=max_pfolio,
         curr_pfolio=curr_pfolio,
         decline=decline,
+        min_pfolio=min_pfolio,
+        improve=improve,
     )
 
     # trailing
@@ -389,15 +393,18 @@ def adjust_highest(**kwargs):
 
 def adjust_detoriation(**kwargs):
     kwargs["fn"] = is_pyramid_cond
-    if kwargs["perc"]["decline"] > 2.5:
+    if kwargs["perc"]["decline"] > 0.25:
         sleep(slp)
+        logging.debug("perc_decline > 0.25")
         if kwargs["adjust"]["ratio"] >= snse["DIFF_THRESHOLD"]:
             pm.reduce_value(kwargs["adjust"]["amount"], endswith="CE")
-            kwargs["last"] = "adjust_detoriation"
+            kwargs["last"] = "call adjust_detoriation"
+            logging.debug("cal adjust_detoriation")
             kwargs.pop("fn")
         elif kwargs["adjust"]["ratio"] <= snse["DIFF_THRESHOLD"] * -1:
             pm.reduce_value(kwargs["adjust"]["amount"], endswith="PE")
-            kwargs["last"] = "adjust_detoriation"
+            kwargs["last"] = "put adjust_detoriation"
+            logging.debug("put adjust_detoriation")
             kwargs.pop("fn")
     return kwargs
 
