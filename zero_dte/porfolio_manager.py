@@ -62,7 +62,7 @@ class PortfolioManager:
                 # negative entry lot
                 entry_lot = entry["qty"] / self.lotsize
                 # positive value per entry lot
-                val_per_lot = entry["value"] / entry_lot
+                val_per_lot = abs(entry["value"] / entry_lot)
                 # postive target lot
                 target_lot = math.ceil(value_to_reduce / entry["ltp"] / self.lotsize)
                 print(f"{entry_lot=} {target_lot=} {val_per_lot=}")

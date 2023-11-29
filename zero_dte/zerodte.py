@@ -171,7 +171,7 @@ def _update_metrics(**kwargs):
         highest = pnl
 
     kwargs["portfolio"] = dict(
-        portfolio="portfolio",
+        portfolio=True,
         lowest=lowest,
         highest=highest,
         value=sell_value,
@@ -257,8 +257,13 @@ def is_pyramid_cond(**kwargs):
     kwargs = _calculate_allowable_quantity(**kwargs)
     kwargs["fn"] = is_trailing_cond
 
-    if kwargs["lotsize"] > 0 and (
-        kwargs["last"] != "attempt to pyramid" or kwargs["last"] != "pyramid complete"
+    if (
+        kwargs["lotsize"] > 0
+        and (
+            kwargs["last"] != "attempt to pyramid"
+            or kwargs["last"] != "pyramid complete"
+        )
+        and kwargs["portfolio"]["portfolio"]
     ):
         increase = kwargs["portfolio"]["highest"] - kwargs["portfolio"]["lowest"]
         if kwargs["pnl"] > kwargs["quantity"]["sell"] * 2:
@@ -352,8 +357,7 @@ def is_trailing_cond(**kwargs):
         return kwargs
 
     # set values
-    # kwargs["fn"] = is_pyramid_cond
-    kwargs["fn"] = adjust_highest
+    kwargs["fn"] = adjust
     if 0 < kwargs["trailing"]["trailing"] <= 4:
         kwargs = _exit_by_trail(**kwargs)
     """
@@ -365,47 +369,56 @@ def is_trailing_cond(**kwargs):
     return kwargs
 
 
-def adjust_highest(**kwargs):
-    kwargs["fn"] = adjust_detoriation
+def adjust(**kwargs):
+    kwargs["fn"] = profit
     pm.update(kwargs["positions"], "ltp")
-    if (
-        pm.is_above_highest_ltp("CE")
-        and kwargs["adjust"]["ratio"] >= snse["DIFF_THRESHOLD"]
-    ):
-        buy_entry = pm.adjust_highest_ltp(kwargs["adjust"]["amount"], endswith="CE")
-        print(f"{buy_entry=}")
-        kwargs["positions"] = pm.update()
-        kwargs["adjust"]["adjust"] = True
-        kwargs["last"] = "adjust mode ON"
+    ce_or_pe = None
+
+    if kwargs["adjust"]["ratio"] >= snse["DIFF_THRESHOLD"] * 5:
         sleep(slp)
-    elif (
-        pm.is_above_highest_ltp("PE")
-        and kwargs["adjust"]["ratio"] <= snse["DIFF_THRESHOLD"] * -1
-    ):
-        sell_entry = pm.adjust_highest_ltp(kwargs["adjust"]["amount"], endswith="PE")
-        print(f"{sell_entry=}")
-        kwargs["positions"] = pm.update()
-        kwargs["adjust"]["adjust"] = True
-        kwargs["last"] = "adjust mode ON"
+        ce_or_pe = "CE"
+    elif kwargs["adjust"]["ratio"] <= snse["DIFF_THRESHOLD"] * -2:
         sleep(slp)
+        ce_or_pe = "PE"
+
+    if ce_or_pe:
+        kwargs["adjust"]["adjust"] = False
+        if pm.is_above_highest_ltp(endswith=ce_or_pe):
+            kwargs["last"] = f"{ce_or_pe} adjust_highest"
+            logging.debug(f"{ce_or_pe} adjust_highest")
+            buy_entry = pm.adjust_highest_ltp(kwargs["adjust"]["amount"], ce_or_pe)
+            print(f"{buy_entry=}")
+            kwargs["adjust"]["adjust"] = True
+        if kwargs["perc"]["decline"] > 0.25:
+            kwargs["last"] = f"{ce_or_pe} adjust_detoriation"
+            logging.debug(f"{ce_or_pe} adjust_detoriation")
+            pm.reduce_value(kwargs["adjust"]["amount"], endswith=ce_or_pe)
+            kwargs["adjust"]["adjust"] = True
+        if kwargs["portfolio"]["m2m"] < 0:
+            kwargs["last"] = f"{ce_or_pe} adjust_negative_pnl"
+            logging.debug(f"{ce_or_pe} adjust_negative_pnl")
+            pm.reduce_value(kwargs["adjust"]["amount"], endswith=ce_or_pe)
+            kwargs["adjust"]["adjust"] = True
+        if kwargs["quantity"]["sell"] >= snse["MAX_QTY"]:
+            kwargs["last"] = f"{ce_or_pe} adjust_max_qty"
+            logging.debug(f"{ce_or_pe} adjust_max_qty")
+            pm.reduce_value(kwargs["adjust"]["amount"], endswith=ce_or_pe)
+            kwargs["adjust"]["adjust"] = True
+        if not kwargs["adjust"]["adjust"]:
+            ce_or_pe = "PE" if ce_or_pe == "CE" else "CE"
+            # TODO sell fresh
+            pm.reduce_value(kwargs["adjust"]["amount"] * -1, endswith=ce_or_pe)
+
+    kwargs["positions"] = pm.update()
     return kwargs
 
 
-def adjust_detoriation(**kwargs):
+def profit(**kwargs):
     kwargs["fn"] = is_pyramid_cond
-    if kwargs["perc"]["decline"] > 0.25:
-        sleep(slp)
-        logging.debug("perc_decline > 0.25")
-        if kwargs["adjust"]["ratio"] >= snse["DIFF_THRESHOLD"]:
-            pm.reduce_value(kwargs["adjust"]["amount"], endswith="CE")
-            kwargs["last"] = "call adjust_detoriation"
-            logging.debug("cal adjust_detoriation")
-            kwargs.pop("fn")
-        elif kwargs["adjust"]["ratio"] <= snse["DIFF_THRESHOLD"] * -1:
-            pm.reduce_value(kwargs["adjust"]["amount"], endswith="PE")
-            kwargs["last"] = "put adjust_detoriation"
-            logging.debug("put adjust_detoriation")
-            kwargs.pop("fn")
+    if kwargs["perc"]["decline"] > 2.5:
+        kwargs["portfolio"]["portfolio"] == False
+    elif kwargs["perc"]["improve"] > 2.5:
+        kwargs["portfolio"]["portfolio"] == True
     return kwargs
 
 
