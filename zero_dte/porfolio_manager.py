@@ -1,12 +1,12 @@
 # add typing with future compatablity
 import math
+import re
 
 
 class PortfolioManager:
-    def __init__(self, lst_of_positions, lotsize, highest_ltp):
+    def __init__(self, lst_of_positions, snse):
         self.portfolio = lst_of_positions
-        self.lotsize = lotsize
-        self.highest_ltp = highest_ltp
+        self.snse = snse
 
     def update(self, list_of_positions=[], sort_key="value"):
         if any(list_of_positions):
@@ -17,26 +17,6 @@ class PortfolioManager:
             for pos in self.portfolio
         ]
         return self.portfolio
-
-    def add_position(self, position_dict):
-        is_append = True
-        for entry in self.portfolio:
-            if entry["symbol"] == position_dict["symbol"]:
-                entry["qty"] += position_dict["qty"]
-                entry["m2m"] += position_dict["m2m"]
-                entry["rpl"] += position_dict["rpl"]
-                entry["ltp"] = position_dict["ltp"]
-                entry["value"] = position_dict["value"]
-                is_append = False
-                break
-        if is_append:
-            self.portfolio.append(position_dict)
-
-    def replace_position(self, position_dict):
-        symbol = position_dict["symbol"]
-        for entry in self.portfolio:
-            if entry["symbol"] == symbol:
-                entry = position_dict
 
     def close_positions(self):
         self.portfolio.sort(key=lambda x: x["ltp"], reverse=True)
@@ -49,22 +29,26 @@ class PortfolioManager:
                 entry["qty"] = 0
                 yield entry
 
-    def reduce_value(self, value_to_reduce, endswith):
+    def reduce_value(self, value_to_reduce, contains):
         self.portfolio.sort(key=lambda x: x["ltp"], reverse=True)
 
         for entry in self.portfolio:
             if (
                 entry["qty"] < 0
                 and value_to_reduce > 0
-                and entry["symbol"].endswith(endswith)
+                and re.search(
+                    re.escape(self.snse["EXPIRY"] + contains), entry["symbol"]
+                )
             ):
                 print(f"working on {entry['symbol']}")
                 # negative entry lot
-                entry_lot = entry["qty"] / self.lotsize
+                entry_lot = entry["qty"] / self.snse["LOT_SIZE"]
                 # positive value per entry lot
                 val_per_lot = abs(entry["value"] / entry_lot)
                 # postive target lot
-                target_lot = math.ceil(value_to_reduce / entry["ltp"] / self.lotsize)
+                target_lot = math.ceil(
+                    value_to_reduce / entry["ltp"] / self.snse["LOT_SIZE"]
+                )
                 print(f"{entry_lot=} {target_lot=} {val_per_lot=}")
                 calculated = (
                     abs(entry_lot) if target_lot > abs(entry_lot) else target_lot
@@ -72,7 +56,7 @@ class PortfolioManager:
                 calculated = 1 if calculated == 0 else calculated
                 print(f"{calculated=} lot")
 
-                entry["reduced_qty"] = calculated * self.lotsize
+                entry["reduced_qty"] = calculated * self.snse["LOT_SIZE"]
                 entry["qty"] += entry["reduced_qty"]
 
                 # neutral m2m
@@ -90,30 +74,34 @@ class PortfolioManager:
                 print(f"final {value_to_reduce=}")
         return value_to_reduce  # Return the resulting value_to_reduce in negative
 
-    def is_above_highest_ltp(self, endswith: str) -> bool:
+    def is_above_highest_ltp(self, contains: str) -> bool:
         if any(
-            pos["symbol"].endswith(endswith)
+            re.search(re.escape(self.snse["EXPIRY"] + contains), pos["symbol"])
             and pos["qty"] < 0
-            and pos["ltp"] > self.highest_ltp
+            and pos["ltp"] > self.snse["MAX_SOLD_LTP"]
             for pos in self.portfolio
         ):
             return True
         return False
 
-    def adjust_highest_ltp(self, adjust_amount, endswith=None):
+    def adjust_highest_ltp(self, adjust_amount, contains=""):
         self.portfolio.sort(key=lambda x: x["ltp"], reverse=True)
         adjusted = {"reduction_qty": 0}
         for entry in self.portfolio:
-            if entry["qty"] < 0 and entry["symbol"].endswith(endswith):
+            if entry["qty"] < 0 and re.search(
+                re.escape(self.snse["EXPIRY"] + contains), entry["symbol"]
+            ):
                 # negative entry lot
-                entry_lot = entry["qty"] / self.lotsize
+                entry_lot = entry["qty"] / self.snse["LOT_SIZE"]
                 # positive value per entry lot
                 val_per_lot = abs(adjust_amount / entry_lot)
                 # postive target lot
-                target_lot = math.ceil(adjust_amount / entry["ltp"] / self.lotsize)
+                target_lot = math.ceil(
+                    adjust_amount / entry["ltp"] / self.snse["LOT_SIZE"]
+                )
                 target_lot = 1 if target_lot == 0 else target_lot
                 # adjust_qty
-                action_quantity = target_lot * self.lotsize
+                action_quantity = target_lot * self.snse["LOT_SIZE"]
                 entry["qty"] += action_quantity  # buy
                 # Adjust m2m and rpl
                 m2m_adjustment = val_per_lot * target_lot
@@ -125,18 +113,29 @@ class PortfolioManager:
 
         return adjusted
 
-    def find_closest_premium(self, quotes, premium, endswith):
+    def find_closest_premium(self, quotes, premium, contains):
+        contains = self.snse["EXPIRY"] + contains
         closest_symbol = None
         closest_difference = float("inf")
 
         for symbol, ltp in quotes.items():
-            if symbol.endswith(endswith):
+            if re.search(re.escape(contains), symbol):
                 difference = abs(ltp - premium)
                 if difference < closest_difference:
                     closest_difference = difference
                     closest_symbol = symbol
-
         return closest_symbol
+
+    def close_profiting_position(self, endswith):
+        qty = 0
+        for pos in self.portfolio:
+            if (
+                pos["symbol"].endswith(endswith)
+                and pos["ltp"] < self.snse["COVER_FOR_PROFIT"]
+            ):
+                qty = pos["qty"]
+                break
+        return qty
 
     """
     def adjust_value(self, value_to_reduce, endswith=None):

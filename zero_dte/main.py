@@ -1,6 +1,6 @@
 from stratergy.mcx import Mcx
 from omspy_brokers.finvasia import Finvasia
-from constants import common, smcx, snse, cnfg, logging
+from constants import common, smcx, cnfg, logging
 import pendulum as pdlm
 import traceback
 

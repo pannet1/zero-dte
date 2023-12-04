@@ -13,11 +13,17 @@ def option_chain(resp):
     try:
         row = {}
         option_types_n_strikes = [
-            (tradingsymbol, "CALL", re.search(
-                r"(\d{5})+?CE?", tradingsymbol).group(1)[:5])
+            (
+                tradingsymbol,
+                "CALL",
+                re.search(r"(\d{5})+?CE?", tradingsymbol).group(1)[:5],
+            )
             if tradingsymbol.endswith("CE")
-            else (tradingsymbol, "PUT", re.search(
-                r"(\d{5})+?PE?", tradingsymbol).group(1)[:5])
+            else (
+                tradingsymbol,
+                "PUT",
+                re.search(r"(\d{5})+?PE?", tradingsymbol).group(1)[:5],
+            )
             for tradingsymbol in [key.split(":")[-1] for key in resp.keys()]
         ]
         [
@@ -35,8 +41,7 @@ def option_chain(resp):
         ]
         [
             row[strike_price].update(
-                {"put": {
-                    tradingsymbol: resp[f"NFO:{tradingsymbol}"]["last_price"]}}
+                {"put": {tradingsymbol: resp[f"NFO:{tradingsymbol}"]["last_price"]}}
             )
             for tradingsymbol, option_type, strike_price in option_types_n_strikes
             if option_type == "PUT"
@@ -45,12 +50,3 @@ def option_chain(resp):
         logging.error(f"exception {b}")
     else:
         return row
-
-
-def slp_til_next_sec():
-    t = dt.now()
-    interval = t.microsecond / 1000000
-    sleep(interval)
-    return interval
-
-
