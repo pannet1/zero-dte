@@ -28,7 +28,7 @@ class Paper:
     def ltp(self):
         dct = {}
         for token in self.exchtkn:
-            dct[token] = randint(1, 200)
+            dct[token] = randint(1, 100)
         return dct
 
     def order_place(self, position_dict):
@@ -53,6 +53,6 @@ class Paper:
         df["bought"] = df.quantity_buy * df.price_buy
         df["sold"] = df.quantity_sell * df.price_sell
         df["qty"] = df.quantity_buy - df.quantity_sell
-        df["m2m"] = df.sold - df.bought
+        df = df.groupby("symbol").sum().reset_index()
         dct = df.to_dict(orient="records")
         return dct

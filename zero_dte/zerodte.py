@@ -143,9 +143,9 @@ def reset_trailing(**kwargs):
 def _update_metrics(**kwargs):
     def _calc_m2m(pos):
         if pos["qty"] > 0:
-            return (pos["ltp"] - pos["quantity_buy"]) * pos["price_buy"]
-        else:
-            return (pos["quantity_buy"] - pos["ltp"]) * pos["price_buy"]
+            return (pos["qty"] * pos["ltp"]) - pos["bought"]
+        elif pos["qty"] < 0:
+            return pos["sold"] - (abs(pos["qty"]) * pos["ltp"])
 
     kwargs["positions"] = pm.portfolio
     for pos in kwargs["positions"]:
@@ -153,7 +153,7 @@ def _update_metrics(**kwargs):
         pos["value"] = int(pos["qty"] * pos["ltp"])
         pos["m2m"] = _calc_m2m(pos) if pos["qty"] != 0 else 0
         # TODO
-        pos["rpl"] = pos["value"] - (pos["sold"] - pos["bought"])
+        pos["rpl"] = pos["sold"] - pos["bought"] if pos["qty"] == 0 else 0
     # positions.sort(key=lambda x: x["value"], reverse=False)
 
     # portfolio
