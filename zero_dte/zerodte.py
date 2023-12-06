@@ -1,18 +1,18 @@
-from numpy import who
-from toolkit.regative import Regative
-from symbols import Symbols
-from time import sleep
-from rich import print
-from prettytable import PrettyTable
 from constants import snse, logging, common, cnfg
 from porfolio_manager import PortfolioManager
 from toolkit.digits import Digits
+from toolkit.regative import Regative
+from symbols import Symbols
+from utils import calc_m2m
+from time import sleep
+from rich import print
+from prettytable import PrettyTable
 import math
 import re
 
-slp = 1
+slp = 5
 pm = PortfolioManager([], snse)
-symbols = Symbols("NFO", snse["SYMBOL"], snse["EXPIRY"])
+obj_sym = Symbols("NFO", snse["SYMBOL"], snse["EXPIRY"])
 
 if common["live"]:
     from omspy_brokers.finvasia import Finvasia
@@ -27,9 +27,9 @@ if common["live"]:
 else:
     from paper import Paper
 
-    dct_tokens = symbols.get_tokens(20250)
+    dct_tokens = obj_sym.get_tokens(20250)
     lst_tokens = list(dct_tokens.keys())
-    brkr = Paper(lst_tokens)
+    brkr = Paper(lst_tokens, dct_tokens)
     wserver = brkr
 
 
@@ -52,10 +52,10 @@ def _prettify(lst):
 
 def prettier(**kwargs) -> dict:
     for k, v in kwargs.items():
+        if k == "quotes":
+            continue
         table = PrettyTable()
         if isinstance(v, dict):
-            if v == "quotes":
-                continue
             table.field_names = v.keys()
             table.add_row(v.values())
             print(table)
@@ -82,55 +82,52 @@ def _calculate_allowable_quantity(**kwargs):
 
 
 def _pyramid(**kwargs):
-    symbol = pm.find_closest_premium(
+    symbol = obj_sym.find_closest_premium(
         kwargs["quotes"], snse["SEL_PREMIUM"], contains="C"
     )
-    brkr.order_place(
-        {
-            "symbol": symbol,
-            "qty": kwargs["lotsize"],
-            "side": "S",
-            "prc": kwargs["quotes"][symbol],
-            "tag": "pyramid",
-        }
-    )
-    symbol = pm.find_closest_premium(
+
+    args = {
+        "symbol": symbol,
+        "qty": kwargs["lotsize"],
+        "side": "S",
+        "prc": kwargs["quotes"][symbol],
+        "tag": "pyramid",
+    }
+    brkr.order_place(**args)
+    symbol = obj_sym.find_closest_premium(
         kwargs["quotes"], snse["BUY_PREMIUM"], contains="C"
     )
-    brkr.order_place(
-        {
-            "symbol": symbol,
-            "qty": kwargs["lotsize"],
-            "side": "B",
-            "prc": kwargs["quotes"][symbol],
-            "tag": "pyramid",
-        }
-    )
-    symbol = pm.find_closest_premium(
+    args = {
+        "symbol": symbol,
+        "qty": kwargs["lotsize"],
+        "side": "B",
+        "prc": kwargs["quotes"][symbol],
+        "tag": "pyramid",
+    }
+    brkr.order_place(**args)
+    symbol = obj_sym.find_closest_premium(
         kwargs["quotes"], snse["SEL_PREMIUM"], contains="P"
     )
-    brkr.order_place(
-        {
-            "symbol": symbol,
-            "qty": kwargs["lotsize"],
-            "side": "S",
-            "prc": kwargs["quotes"][symbol],
-            "tag": "pyramid",
-        }
-    )
-    symbol = pm.find_closest_premium(
+    args = {
+        "symbol": symbol,
+        "qty": kwargs["lotsize"],
+        "side": "S",
+        "prc": kwargs["quotes"][symbol],
+        "tag": "pyramid",
+    }
+    brkr.order_place(**args)
+    symbol = obj_sym.find_closest_premium(
         kwargs["quotes"], snse["BUY_PREMIUM"], contains="P"
     )
-    brkr.order_place(
-        {
-            "symbol": symbol,
-            "qty": kwargs["lotsize"],
-            "side": "B",
-            "prc": kwargs["quotes"][symbol],
-            "tag": "pyramid",
-        }
-    )
-    pm.update(brkr.positions, sort_key="qty")
+    args = {
+        "symbol": symbol,
+        "qty": kwargs["lotsize"],
+        "side": "B",
+        "prc": kwargs["quotes"][symbol],
+        "tag": "pyramid",
+    }
+    brkr.order_place(**args)
+    kwargs["positions"] = brkr.positions
     return kwargs
 
 
@@ -141,17 +138,11 @@ def reset_trailing(**kwargs):
 
 
 def _update_metrics(**kwargs):
-    def _calc_m2m(pos):
-        if pos["qty"] > 0:
-            return (pos["qty"] * pos["ltp"]) - pos["bought"]
-        elif pos["qty"] < 0:
-            return pos["sold"] - (abs(pos["qty"]) * pos["ltp"])
-
-    kwargs["positions"] = pm.portfolio
+    kwargs["positions"] = pm.update(brkr.positions, "ltp")
     for pos in kwargs["positions"]:
         pos["ltp"] = kwargs["quotes"][pos["symbol"]]
         pos["value"] = int(pos["qty"] * pos["ltp"])
-        pos["m2m"] = _calc_m2m(pos) if pos["qty"] != 0 else 0
+        pos["m2m"] = calc_m2m(pos) if pos["qty"] != 0 else 0
         # TODO
         pos["rpl"] = pos["sold"] - pos["bought"] if pos["qty"] == 0 else 0
     # positions.sort(key=lambda x: x["value"], reverse=False)
@@ -161,6 +152,7 @@ def _update_metrics(**kwargs):
     m2m = sum(pos["m2m"] for pos in kwargs["positions"])
     rpl = sum(pos["rpl"] for pos in kwargs["positions"])
     pnl = m2m + rpl
+
     if kwargs.get("portfolio", False):
         lowest = min(pnl, kwargs["portfolio"]["lowest"])
         highest = max(pnl, kwargs["portfolio"]["highest"])
@@ -244,7 +236,7 @@ def _update_metrics(**kwargs):
     )
 
     kwargs["pnl"] = pnl
-    sleep(0.5)
+    sleep(2)
     return kwargs
 
 
@@ -257,10 +249,7 @@ def is_pyramid_cond(**kwargs):
 
     if (
         kwargs["lotsize"] > 0
-        and (
-            kwargs["last"] != "attempt to pyramid"
-            or kwargs["last"] != "pyramid complete"
-        )
+        and kwargs["last"] != "pyramid complete"
         and kwargs["portfolio"]["portfolio"]
     ):
         increase = kwargs["portfolio"]["highest"] - kwargs["portfolio"]["lowest"]
@@ -290,50 +279,58 @@ def is_trailing_cond(**kwargs):
                 f'{value_to_reduce=}= -0.2 X value {kwargs["portfolio"]["value"]} / 2',
                 kwargs,
             )
-            print(f"INITIAL VALUE TO REDUCE: {value_to_reduce}")
-            print("======== AFTER TRAIL ========")
-            pm.portfolio = kwargs["positions"]
-            call_value_to_reduce = pm.reduce_value(value_to_reduce, contains="CE")
-            print("call values to reduce:", call_value_to_reduce)
-            put_value_to_reduce = pm.reduce_value(value_to_reduce, contains="PE")
-            print("put values to reduce:", put_value_to_reduce)
+            call_value_to_reduce, lst_of_ords = pm.reduce_value(
+                value_to_reduce, contains="C"
+            )
+            for ord in lst_of_ords:
+                ord.update({"tag": "call_trail_stop"})
+                brkr.order_place(**ord)
+            kwargs = last_print(
+                f"call values to reduce: {call_value_to_reduce}", kwargs
+            )
             if call_value_to_reduce < 0:
-                symbol = pm.find_closest_premium(
+                symbol = obj_sym.find_closest_premium(
                     kwargs["quotes"], snse["SEL_PREMIUM"], contains="C"
                 )
                 lots = math.ceil(
                     call_value_to_reduce / quotes[symbol] / snse["LOT_SIZE"]
                 )
-                print(f"sell {lots=}fresh call {symbol}")
-                brkr.order_place(
-                    {
-                        "symbol": symbol,
-                        "qty": lots * kwargs["lotsize"],
-                        "side": "S",
-                        "prc": kwargs["quotes"][symbol],
-                        "tag": "trail",
-                    }
-                )
+                kwargs = last_print(f"sell {lots=}fresh call {symbol}", kwargs)
+                args = {
+                    "symbol": symbol,
+                    "qty": lots * kwargs["lotsize"],
+                    "side": "S",
+                    "tag": "trail",
+                }
+                brkr.order_place(**args)
+            # TODO
+            put_value_to_reduce, lst_of_ords = pm.reduce_value(
+                value_to_reduce, contains="P"
+            )
+            for ord in lst_of_ords:
+                ord.update({"tag": "put_trail_stop"})
+                print(ord)
+                brkr.order_place(**ord)
+            kwargs = last_print(f"put values to reduce: { put_value_to_reduce}", kwargs)
             if put_value_to_reduce < 0:
-                symbol = pm.find_closest_premium(
+                symbol = obj_sym.find_closest_premium(
                     kwargs["quotes"], snse["SEL_PREMIUM"], contains="P"
                 )
                 lots = math.ceil(
                     put_value_to_reduce / quotes[symbol] / snse["LOT_SIZE"]
                 )
-                print(f"sell {lots=} fresh put {symbol}")
-                brkr.order_place(
-                    {
-                        "symbol": symbol,
-                        "qty": lots * kwargs["lotsize"],
-                        "side": "S",
-                        "prc": kwargs["quotes"][symbol],
-                        "tag": "trail",
-                    }
-                )
-            kwargs["positions"] = pm.update()
-            _prettify(kwargs["positions"])
-            kwargs["last"] = f'trailed level: {kwargs["trailing"]["trailing"]}'
+                logging.debug(f"sell {lots=} fresh put {symbol}")
+                args = {
+                    "symbol": symbol,
+                    "qty": lots * kwargs["lotsize"],
+                    "side": "S",
+                    "tag": "trail",
+                }
+                brkr.order_place(*args)
+            kwargs["positions"] = pm.update(brkr.positions, "ltp")
+            kwargs = last_print(
+                f'trailed level: {kwargs["trailing"]["trailing"]}', kwargs
+            )
             kwargs["trailing"]["trailing"] += 1
             # TODO
         return kwargs
@@ -344,8 +341,12 @@ def is_trailing_cond(**kwargs):
         kwargs = _exit_by_trail(**kwargs)
     elif kwargs["trailing"]["trailing"] == 5:
         if kwargs["trailing"]["perc_decline"] >= 1.5:
+            kwargs = last_print("trailing EXIT", kwargs)
             for pos in pm.close_positions():
-                print("order place", pos)
+                brkr.order_place(**pos)
+            # TODO
+            # kwargs.pop('fn')
+
     return kwargs
 
 
@@ -356,35 +357,69 @@ def adjust(**kwargs):
 
     if kwargs["adjust"]["ratio"] >= snse["DIFF_THRESHOLD"] * 5:
         sleep(slp)
-        ce_or_pe = "CE"
+        ce_or_pe = "C"
     elif kwargs["adjust"]["ratio"] <= snse["DIFF_THRESHOLD"] * -2:
         sleep(slp)
-        ce_or_pe = "PE"
+        ce_or_pe = "P"
 
     if ce_or_pe:
         kwargs["adjust"]["adjust"] = False
         if pm.is_above_highest_ltp(contains=ce_or_pe):
             kwargs = last_print(f"{ce_or_pe} adjust_highest", kwargs)
+            kwargs["adjust"]["adjust"] = 1
+            kwargs["fn"] = is_pyramid_cond
             buy_entry = pm.adjust_highest_ltp(kwargs["adjust"]["amount"], ce_or_pe)
-            print(f"{buy_entry=}")
-            kwargs["adjust"]["adjust"] = True
+            args = {
+                "symbol": buy_entry["symbol"],
+                "qty": buy_entry["qty"],
+                "side": "B",
+                "tag": "adjust_highest_ltp",
+            }
+            brkr.order_place(**args)
+            # TODO should fresh calls be sold
+            return kwargs
         if kwargs["perc"]["decline"] > 0.25:
+            kwargs["adjust"]["adjust"] = 2
             kwargs = last_print(f"{ce_or_pe} adjust_detoriation", kwargs)
-            pm.reduce_value(kwargs["adjust"]["amount"], contains=ce_or_pe)
-            kwargs["adjust"]["adjust"] = True
+            reduced_value, lst_of_ords = pm.reduce_value(
+                kwargs["adjust"]["amount"], contains=ce_or_pe
+            )
+            for ord in lst_of_ords:
+                ord.update({"tag": "adjust_detoriation"})
+                print(ord)
+                brkr.order_place(**ord)
+            # TODO
+            print(f"{reduced_value=}")
+            kwargs["fn"] = is_pyramid_cond
+            return kwargs
         if kwargs["portfolio"]["m2m"] < 0:
+            kwargs["adjust"]["adjust"] = 3
             kwargs = last_print(f"{ce_or_pe} adjust_negative_pnl", kwargs)
-            pm.reduce_value(kwargs["adjust"]["amount"], contains=ce_or_pe)
-            kwargs["adjust"]["adjust"] = True
+            reduced_value, lst_of_ords = pm.reduce_value(
+                kwargs["adjust"]["amount"], contains=ce_or_pe
+            )
+            for ord in lst_of_ords:
+                ord.update({"tag": "adjust_detoriation"})
+                brkr.order_place(**ord)
+            print(f"{reduced_value=}")
+            kwargs["fn"] = is_pyramid_cond
+            return kwargs
         if kwargs["quantity"]["sell"] >= snse["MAX_QTY"]:
+            kwargs["adjust"]["adjust"] = 4
             kwargs = last_print(f"{ce_or_pe} adjust_max_qty", kwargs)
-            pm.reduce_value(kwargs["adjust"]["amount"], contains=ce_or_pe)
-            kwargs["adjust"]["adjust"] = True
-        if not kwargs["adjust"]["adjust"]:
-            ce_or_pe = "PE" if ce_or_pe == "CE" else "CE"
+            reduced_value, lst_of_ords = pm.reduce_value(
+                kwargs["adjust"]["amount"], contains=ce_or_pe
+            )
+            for ord in lst_of_ords:
+                ord.update({"tag": "adjust_detoriation"})
+                brkr.order_place(**ord)
+            print(f"{reduced_value=}")
+            kwargs["fn"] = is_pyramid_cond
+            return kwargs
+        if kwargs["adjust"]["adjust"] == 4:
+            ce_or_pe = "P" if ce_or_pe == "C" else "C"
             # TODO sell fresh
             pm.reduce_value(kwargs["adjust"]["amount"] * -1, contains=ce_or_pe)
-
     kwargs["positions"] = pm.update()
     return kwargs
 
@@ -400,20 +435,21 @@ def profit(**kwargs):
 
 def close_profit_position(**kwargs):
     kwargs["fn"] = is_portfolio_stop
-    ce_qty = pm.close_profiting_position("CE")
+    ce_qty = pm.close_profiting_position("C")
     if ce_qty < 0:
-        print("take CE new positions")
-    pe_qty = pm.close_profiting_position("PE")
+        print("take C new positions")
+    pe_qty = pm.close_profiting_position("P")
     if pe_qty < 0:
-        print("take PE new position")
+        print("take P new position")
     return kwargs
 
 
 def is_portfolio_stop(**kwargs):
     kwargs["fn"] = is_pyramid_cond
     if kwargs["perc"]["curr_pfolio"] < snse["PFOLIO_SL_PERC"]:
-        for pos in pm.close_positions():
-            print("order place", pos)
+        for entry in pm.close_positions():
+            entry.update({"tag": "porfolio stop"})
+            brkr.order_place(**entry)
         kwargs = last_print("portfolio stop hit", kwargs)
         kwargs.pop("fn")
     return kwargs

@@ -23,15 +23,16 @@ class PortfolioManager:
 
         for entry in self.portfolio:
             if entry["qty"] != 0:
-                entry["rpl"] += entry["m2m"]
-                entry["m2m"] = 0
-                entry["reduced_qty"] = -1 * entry["qty"]
-                entry["qty"] = 0
-                yield entry
+                pos = dict(
+                    symbol=entry["symbol"],
+                    side="B" if entry["qty"] < 0 else "S",
+                    qty=abs(entry["qty"]),
+                )
+                yield pos
 
     def reduce_value(self, value_to_reduce, contains):
         self.portfolio.sort(key=lambda x: x["ltp"], reverse=True)
-
+        lst = [{}]
         for entry in self.portfolio:
             if (
                 entry["qty"] < 0
@@ -41,6 +42,7 @@ class PortfolioManager:
                 )
             ):
                 print(f"working on {entry['symbol']}")
+                pos = {}
                 # negative entry lot
                 entry_lot = entry["qty"] / self.snse["LOT_SIZE"]
                 # positive value per entry lot
@@ -50,29 +52,22 @@ class PortfolioManager:
                     value_to_reduce / entry["ltp"] / self.snse["LOT_SIZE"]
                 )
                 print(f"{entry_lot=} {target_lot=} {val_per_lot=}")
+
                 calculated = (
                     abs(entry_lot) if target_lot > abs(entry_lot) else target_lot
                 )
                 calculated = 1 if calculated == 0 else calculated
                 print(f"{calculated=} lot")
 
-                entry["reduced_qty"] = calculated * self.snse["LOT_SIZE"]
-                entry["qty"] += entry["reduced_qty"]
-
-                # neutral m2m
-                m2m_per_lot = entry["m2m"] / abs(entry_lot)
-                m2m_for_this = m2m_per_lot * calculated
-                print(f"{m2m_for_this=} {m2m_per_lot=} * {calculated}")
-
-                entry["m2m"] -= m2m_for_this
-                entry["rpl"] += m2m_for_this
-
                 val_for_this = calculated * val_per_lot
-                entry["value"] += val_for_this
                 value_to_reduce -= val_for_this
-
                 print(f"final {value_to_reduce=}")
-        return value_to_reduce  # Return the resulting value_to_reduce in negative
+
+                pos["symbol"] = entry["symbol"]
+                pos["qty"] = calculated * self.snse["LOT_SIZE"]
+                pos["side"] = "B"
+                lst.append(pos)
+        return value_to_reduce, lst  # Return the resulting value_to_reduce in negative
 
     def is_above_highest_ltp(self, contains: str) -> bool:
         if any(
@@ -85,52 +80,28 @@ class PortfolioManager:
         return False
 
     def adjust_highest_ltp(self, adjust_amount, contains=""):
+        contains = self.snse["EXPIRY"] + contains
         self.portfolio.sort(key=lambda x: x["ltp"], reverse=True)
-        adjusted = {"reduction_qty": 0}
+        adjusted = {}
         for entry in self.portfolio:
-            if entry["qty"] < 0 and re.search(
-                re.escape(self.snse["EXPIRY"] + contains), entry["symbol"]
-            ):
+            if entry["qty"] < 0 and re.search(re.escape(contains), entry["symbol"]):
                 # negative entry lot
-                entry_lot = entry["qty"] / self.snse["LOT_SIZE"]
-                # positive value per entry lot
-                val_per_lot = abs(adjust_amount / entry_lot)
-                # postive target lot
                 target_lot = math.ceil(
                     adjust_amount / entry["ltp"] / self.snse["LOT_SIZE"]
                 )
                 target_lot = 1 if target_lot == 0 else target_lot
                 # adjust_qty
-                action_quantity = target_lot * self.snse["LOT_SIZE"]
-                entry["qty"] += action_quantity  # buy
-                # Adjust m2m and rpl
-                m2m_adjustment = val_per_lot * target_lot
-                entry["m2m"] -= m2m_adjustment
-                entry["rpl"] += m2m_adjustment
-                adjusted["reduction_qty"] = action_quantity
-                adjusted.update(entry)
+                adjusted["symbol"] = entry["symbol"]
+                adjusted["qty"] = target_lot * self.snse["LOT_SIZE"]
+                adjusted["side"] = "B"
                 break
-
         return adjusted
 
-    def find_closest_premium(self, quotes, premium, contains):
-        contains = self.snse["EXPIRY"] + contains
-        closest_symbol = None
-        closest_difference = float("inf")
-
-        for symbol, ltp in quotes.items():
-            if re.search(re.escape(contains), symbol):
-                difference = abs(ltp - premium)
-                if difference < closest_difference:
-                    closest_difference = difference
-                    closest_symbol = symbol
-        return closest_symbol
-
-    def close_profiting_position(self, endswith):
+    def close_profiting_position(self, contains):
         qty = 0
         for pos in self.portfolio:
             if (
-                pos["symbol"].endswith(endswith)
+                re.search(re.escape(self.snse["EXPIRY"] + contains), pos["symbol"])
                 and pos["ltp"] < self.snse["COVER_FOR_PROFIT"]
             ):
                 qty = pos["qty"]
@@ -179,24 +150,6 @@ if __name__ == "__main__":
 
     # Example usage of the class with the updated adjust_positions method
     manager = PortfolioManager([], 50, 70)
-    manager.add_position(
-        {"symbol": "NIFTY25APR17550CE", "qty": -50, "value": -500, "m2m": 20, "rpl": 20}
-    )
-    manager.add_position(
-        {"symbol": "NIFTY25APR17750CE", "qty": 0, "value": 0, "m2m": 20, "rpl": 20}
-    )
-    manager.add_position(
-        {
-            "symbol": "NIFTY25APR17650CE",
-            "qty": -200,
-            "value": -100,
-            "m2m": 20,
-            "rpl": 20,
-        }
-    )
-    pprint(manager.portfolio)
     # Positive total_to_adjust (buying)
     total_to_adjust = 650
     print(f"{total_to_adjust=}")
-    for entry in manager.trailing_full(total_to_adjust, endswith="CE"):
-        print(entry)

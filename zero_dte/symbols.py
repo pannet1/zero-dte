@@ -1,4 +1,5 @@
 import pandas as pd
+import re
 
 dct_sym = {
     "NIFTY": {
@@ -79,6 +80,19 @@ class Symbols:
         )
         dct = tokens_found.to_dict()
         return dct["TradingSymbol"]
+
+    def find_closest_premium(self, quotes, premium, contains):
+        contains = self.expiry + contains
+        closest_symbol = None
+        closest_difference = float("inf")
+
+        for symbol, ltp in quotes.items():
+            if re.search(re.escape(contains), symbol):
+                difference = abs(ltp - premium)
+                if difference < closest_difference:
+                    closest_difference = difference
+                    closest_symbol = symbol
+        return closest_symbol
 
 
 if __name__ == "__main__":
