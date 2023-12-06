@@ -328,7 +328,7 @@ def is_trailing_cond(**kwargs):
                     "side": "S",
                     "tag": "trail",
                 }
-                brkr.order_place(*args)
+                brkr.order_place(**args)
             kwargs["positions"] = pm.update(brkr.positions, "ltp")
             kwargs = last_print(
                 f'trailed level: {kwargs["trailing"]["trailing"]}', kwargs
