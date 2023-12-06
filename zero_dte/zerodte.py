@@ -345,7 +345,9 @@ def is_trailing_cond(**kwargs):
         if kwargs["trailing"]["perc_decline"] >= 1.5:
             kwargs = last_print("trailing EXIT", kwargs)
             for pos in pm.close_positions():
-                brkr.order_place(**pos)
+                if any(pos):
+                    pos.update({"tag": "EXIT_BY_TRAIL"})
+                    brkr.order_place(**pos)
             # TODO
             # kwargs.pop('fn')
 
