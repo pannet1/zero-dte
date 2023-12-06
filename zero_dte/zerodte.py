@@ -283,8 +283,9 @@ def is_trailing_cond(**kwargs):
                 value_to_reduce, contains="C"
             )
             for ord in lst_of_ords:
-                ord.update({"tag": "call_trail_stop"})
-                brkr.order_place(**ord)
+                if any(ord):
+                    ord.update({"tag": "call_trail_stop"})
+                    brkr.order_place(**ord)
             kwargs = last_print(
                 f"call values to reduce: {call_value_to_reduce}", kwargs
             )
@@ -293,7 +294,7 @@ def is_trailing_cond(**kwargs):
                     kwargs["quotes"], snse["SEL_PREMIUM"], contains="C"
                 )
                 lots = math.ceil(
-                    call_value_to_reduce / quotes[symbol] / snse["LOT_SIZE"]
+                    call_value_to_reduce / kwargs["quotes"][symbol] / snse["LOT_SIZE"]
                 )
                 kwargs = last_print(f"sell {lots=}fresh call {symbol}", kwargs)
                 args = {
@@ -308,16 +309,17 @@ def is_trailing_cond(**kwargs):
                 value_to_reduce, contains="P"
             )
             for ord in lst_of_ords:
-                ord.update({"tag": "put_trail_stop"})
-                print(ord)
-                brkr.order_place(**ord)
+                if any(ord):
+                    ord.update({"tag": "put_trail_stop"})
+                    print(ord)
+                    brkr.order_place(**ord)
             kwargs = last_print(f"put values to reduce: { put_value_to_reduce}", kwargs)
             if put_value_to_reduce < 0:
                 symbol = obj_sym.find_closest_premium(
                     kwargs["quotes"], snse["SEL_PREMIUM"], contains="P"
                 )
                 lots = math.ceil(
-                    put_value_to_reduce / quotes[symbol] / snse["LOT_SIZE"]
+                    put_value_to_reduce / kwargs["quotes"][symbol] / snse["LOT_SIZE"]
                 )
                 logging.debug(f"sell {lots=} fresh put {symbol}")
                 args = {
@@ -385,9 +387,9 @@ def adjust(**kwargs):
                 kwargs["adjust"]["amount"], contains=ce_or_pe
             )
             for ord in lst_of_ords:
-                ord.update({"tag": "adjust_detoriation"})
-                print(ord)
-                brkr.order_place(**ord)
+                if any(ord):
+                    ord.update({"tag": "adjust_detoriation"})
+                    brkr.order_place(**ord)
             # TODO
             print(f"{reduced_value=}")
             kwargs["fn"] = is_pyramid_cond
@@ -399,8 +401,9 @@ def adjust(**kwargs):
                 kwargs["adjust"]["amount"], contains=ce_or_pe
             )
             for ord in lst_of_ords:
-                ord.update({"tag": "adjust_detoriation"})
-                brkr.order_place(**ord)
+                if any(ord):
+                    ord.update({"tag": "adjust_detoriation"})
+                    brkr.order_place(**ord)
             print(f"{reduced_value=}")
             kwargs["fn"] = is_pyramid_cond
             return kwargs
@@ -411,8 +414,9 @@ def adjust(**kwargs):
                 kwargs["adjust"]["amount"], contains=ce_or_pe
             )
             for ord in lst_of_ords:
-                ord.update({"tag": "adjust_detoriation"})
-                brkr.order_place(**ord)
+                if any(ord):
+                    ord.update({"tag": "adjust_detoriation"})
+                    brkr.order_place(**ord)
             print(f"{reduced_value=}")
             kwargs["fn"] = is_pyramid_cond
             return kwargs
