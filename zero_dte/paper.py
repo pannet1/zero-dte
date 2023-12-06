@@ -28,8 +28,9 @@ class Paper:
     def order_place(self, **position_dict):
         args = dict(
             entry_time=plum.now().to_time_string(),
+            exchange="NFO",
             side=position_dict["side"],
-            quantity=int(position_dict["qty"]),
+            quantity=int(position_dict["quantity"]),
             symbol=position_dict["symbol"],
             price=position_dict.get("prc", randint(1, 200)),
             tag=position_dict["tag"],
@@ -47,7 +48,7 @@ class Paper:
         ).fillna(0)
         df["bought"] = df.quantity_buy * df.price_buy
         df["sold"] = df.quantity_sell * df.price_sell
-        df["qty"] = df.quantity_buy - df.quantity_sell
+        df["quantity"] = df.quantity_buy - df.quantity_sell
 
         df = df.groupby("symbol").sum().reset_index()
         dct = df.to_dict(orient="records")
@@ -55,8 +56,8 @@ class Paper:
         quotes = {self.dct_tokens[key]: value for key, value in quotes.items()}
         for pos in dct:
             pos["ltp"] = quotes[pos["symbol"]]
-            pos["value"] = int(pos["qty"] * pos["ltp"])
-            pos["m2m"] = calc_m2m(pos) if pos["qty"] != 0 else 0
+            pos["value"] = int(pos["quantity"] * pos["ltp"])
+            pos["m2m"] = calc_m2m(pos) if pos["quantity"] != 0 else 0
             # TODO
-            pos["rpl"] = pos["sold"] - pos["bought"] if pos["qty"] == 0 else 0
+            pos["rpl"] = pos["sold"] - pos["bought"] if pos["quantity"] == 0 else 0
         return dct

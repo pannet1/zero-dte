@@ -22,11 +22,11 @@ class PortfolioManager:
         self.portfolio.sort(key=lambda x: x["ltp"], reverse=True)
 
         for entry in self.portfolio:
-            if entry["qty"] != 0:
+            if entry["quantity"] != 0:
                 pos = dict(
                     symbol=entry["symbol"],
-                    side="B" if entry["qty"] < 0 else "S",
-                    qty=abs(entry["qty"]),
+                    side="B" if entry["quantity"] < 0 else "S",
+                    quantity=abs(entry["quantity"]),
                 )
                 yield pos
 
@@ -35,7 +35,7 @@ class PortfolioManager:
         lst = [{}]
         for entry in self.portfolio:
             if (
-                entry["qty"] < 0
+                entry["quantity"] < 0
                 and value_to_reduce > 0
                 and re.search(
                     re.escape(self.snse["EXPIRY"] + contains), entry["symbol"]
@@ -44,7 +44,7 @@ class PortfolioManager:
                 print(f"working on {entry['symbol']}")
                 pos = {}
                 # negative entry lot
-                entry_lot = entry["qty"] / self.snse["LOT_SIZE"]
+                entry_lot = entry["quantity"] / self.snse["LOT_SIZE"]
                 # positive value per entry lot
                 val_per_lot = abs(entry["value"] / entry_lot)
                 # postive target lot
@@ -64,7 +64,7 @@ class PortfolioManager:
                 print(f"final {value_to_reduce=}")
 
                 pos["symbol"] = entry["symbol"]
-                pos["qty"] = calculated * self.snse["LOT_SIZE"]
+                pos["quantity"] = calculated * self.snse["LOT_SIZE"]
                 pos["side"] = "B"
                 lst.append(pos)
         return value_to_reduce, lst  # Return the resulting value_to_reduce in negative
@@ -72,7 +72,7 @@ class PortfolioManager:
     def is_above_highest_ltp(self, contains: str) -> bool:
         if any(
             re.search(re.escape(self.snse["EXPIRY"] + contains), pos["symbol"])
-            and pos["qty"] < 0
+            and pos["quantity"] < 0
             and pos["ltp"] > self.snse["MAX_SOLD_LTP"]
             for pos in self.portfolio
         ):
@@ -84,7 +84,9 @@ class PortfolioManager:
         self.portfolio.sort(key=lambda x: x["ltp"], reverse=True)
         adjusted = {}
         for entry in self.portfolio:
-            if entry["qty"] < 0 and re.search(re.escape(contains), entry["symbol"]):
+            if entry["quantity"] < 0 and re.search(
+                re.escape(contains), entry["symbol"]
+            ):
                 # negative entry lot
                 target_lot = math.ceil(
                     adjust_amount / entry["ltp"] / self.snse["LOT_SIZE"]
@@ -92,28 +94,28 @@ class PortfolioManager:
                 target_lot = 1 if target_lot == 0 else target_lot
                 # adjust_qty
                 adjusted["symbol"] = entry["symbol"]
-                adjusted["qty"] = target_lot * self.snse["LOT_SIZE"]
+                adjusted["quantity"] = target_lot * self.snse["LOT_SIZE"]
                 adjusted["side"] = "B"
                 break
         return adjusted
 
     def close_profiting_position(self, contains):
-        qty = 0
+        quantity = 0
         for pos in self.portfolio:
             if (
                 re.search(re.escape(self.snse["EXPIRY"] + contains), pos["symbol"])
                 and pos["ltp"] < self.snse["COVER_FOR_PROFIT"]
             ):
-                qty = pos["qty"]
+                quantity = pos["quantity"]
                 break
-        return qty
+        return quantity
 
     """
     def adjust_value(self, value_to_reduce, endswith=None):
         for entry in self.portfolio:
             symbol = entry["symbol"]
             opp_val = -1 * entry["value"]
-            opp_qty = -1 * entry["qty"]
+            opp_qty = -1 * entry["quantity"]
             entry["reduction_qty"] = 0
             if (
                 value_to_reduce > 0
@@ -122,7 +124,7 @@ class PortfolioManager:
                 # sell to close
                 value_to_reduce += entry["value"]
                 entry["reduction_qty"] = opp_qty
-                entry["qty"] = 0
+                entry["quantity"] = 0
                 entry["value"] = 0
             elif (
                 value_to_reduce < 0
@@ -131,7 +133,7 @@ class PortfolioManager:
                 # buy to cover
                 value_to_reduce += entry["value"]
                 entry["reduction_qty"] = opp_qty
-                entry["qty"] = 0
+                entry["quantity"] = 0
                 entry["value"] = 0
 
             # Adjust m2m and rpl

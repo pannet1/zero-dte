@@ -4,11 +4,18 @@ import re
 dct_sym = {
     "NIFTY": {
         "diff": 50,
-        "index": "NIFTY50",
+        "index": "Nifty 50",
         "exch": "NSE",
-        "token": 12345,
+        "token": "26000",
         "depth": 16,
-    }
+    },
+    "BANKNIFTY": {
+        "diff": 50,
+        "index": "Nifty Bank",
+        "exch": "NSE",
+        "token": "26009",
+        "depth": 25,
+    },
 }
 
 
