@@ -1,12 +1,11 @@
 from constants import snse, logging, common, cnfg
 from porfolio_manager import PortfolioManager
+from print import prettier
 from toolkit.digits import Digits
-from toolkit.regative import Regative
 from symbols import Symbols, dct_sym
 from utils import calc_m2m
 from time import sleep
 from rich import print
-from prettytable import PrettyTable
 import math
 import re
 import pendulum as pdlm
@@ -16,6 +15,7 @@ slp = 5
 pm = PortfolioManager([], snse)
 SYMBOL = snse["SYMBOL"]
 obj_sym = Symbols("NFO", SYMBOL, snse["EXPIRY"])
+obj_sym.get_exchange_token_map_finvasia()
 times = pdlm.parse("15:30", fmt="HH:mm").time()
 
 if common["live"]:
@@ -33,6 +33,7 @@ if common["live"]:
     if resp and resp.get("lp", False):
         lp = int(float(resp["lp"]))
         atm = obj_sym.get_atm(lp)
+        print(f"{atm=}")
         dct_tokens = obj_sym.get_tokens(atm)
         lst_tokens = list(dct_tokens.keys())
         wserver = Wserver(brkr, lst_tokens, dct_tokens)
@@ -58,43 +59,12 @@ def last_print(text, kwargs):
     return kwargs
 
 
-# TODO to be removed
-def _prettify(lst):
-    if isinstance(lst, dict):
-        lst = [lst]
-    table = PrettyTable()
-    table.field_names = lst[0].keys()
-    for dct in lst:
-        table.add_row(dct.values())
-    print(table)
-
-
 def _order_place(**args):
     print(f"order place{args}")
     args["exchange"] = "NFO"
     args["product"] = "M"
     resp = brkr.order_place(**args)
     print(f"{resp=}")
-
-
-def prettier(**kwargs) -> dict:
-    for k, v in kwargs.items():
-        if k == "quotes":
-            continue
-        table = PrettyTable()
-        if isinstance(v, dict):
-            table.field_names = v.keys()
-            table.add_row(v.values())
-            print(table)
-        elif isinstance(v, list) and any(v):
-            table.field_names = v[0].keys()
-            for item in v:
-                table.add_row(item.values())
-            print(table)
-        else:
-            print(k, ":", Regative(v))
-    print(25 * "=", " END OF REPORT ", 25 * "=", "\n")
-    return kwargs
 
 
 def _calculate_allowable_quantity(**kwargs):
@@ -117,16 +87,6 @@ def _pyramid(**kwargs):
         "symbol": symbol,
         "quantity": kwargs["lotsize"],
         "side": "S",
-        "tag": "pyramid",
-    }
-    _order_place(**args)
-    symbol = obj_sym.find_closest_premium(
-        kwargs["quotes"], snse["BUY_PREMIUM"], contains="C"
-    )
-    args = {
-        "symbol": symbol,
-        "quantity": kwargs["lotsize"],
-        "side": "B",
         "tag": "pyramid",
     }
     _order_place(**args)
@@ -161,10 +121,10 @@ def reset_trailing(**kwargs):
 
 
 def _update_metrics(**kwargs):
-    kwargs["positions"] = pm.update(brkr.positions, "ltp")
+    kwargs["positions"] = pm.update(brkr.positions, "last_price")
     for pos in kwargs["positions"]:
-        pos["ltp"] = kwargs["quotes"][pos["symbol"]]
-        pos["value"] = int(pos["quantity"] * pos["ltp"])
+        pos["last_price"] = kwargs["quotes"][pos["symbol"]]
+        pos["value"] = int(pos["quantity"] * pos["last_price"])
         pos["m2m"] = calc_m2m(pos) if pos["quantity"] != 0 else 0
         # TODO
         pos["rpl"] = pos["sold"] - pos["bought"] if pos["quantity"] == 0 else 0
@@ -355,7 +315,7 @@ def is_trailing_cond(**kwargs):
                     "tag": "trail",
                 }
                 _order_place(**args)
-            kwargs["positions"] = pm.update(brkr.positions, "ltp")
+            kwargs["positions"] = pm.update(brkr.positions, "last_price")
             kwargs = last_print(
                 f'trailed level: {kwargs["trailing"]["trailing"]}', kwargs
             )
@@ -381,7 +341,7 @@ def is_trailing_cond(**kwargs):
 
 def adjust(**kwargs):
     kwargs["fn"] = profit
-    pm.update(kwargs["positions"], "ltp")
+    pm.update(kwargs["positions"], "last_price")
     ce_or_pe = None
 
     if kwargs["adjust"]["ratio"] >= snse["DIFF_THRESHOLD"] * 5:
@@ -486,14 +446,23 @@ def is_portfolio_stop(**kwargs):
     return kwargs
 
 
+"""
+    BEGIN 
+"""
 kwargs = {
     "last": "Happy Trading",
     "trailing": {"trailing": 0},
 }
+# init trailing variables
 kwargs = reset_trailing(**kwargs)
+# init lot size
 kwargs = _calculate_allowable_quantity(**kwargs)
+# init quotes
 kwargs["quotes"] = wserver.ltp
+print(kwargs["quotes"])
+# place the first entry
 kwargs = _pyramid(**kwargs)
+#
 kwargs["fn"] = is_pyramid_cond
 while kwargs.get("fn", "PACK_AND_GO") != "PACK_AND_GO":
     kwargs = prettier(**kwargs)

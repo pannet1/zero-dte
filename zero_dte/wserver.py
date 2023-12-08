@@ -66,7 +66,11 @@ if __name__ == "__main__":
         if broker.authenticate():
             print("success")
 
-    wserver = Wserver(broker, ["NSE|26000"], {"NSE|26000": "NIFTY 50"})
+    wserver = Wserver(
+        broker,
+        ["NSE|26000", "NFO|43156"],
+        {"NSE|26000": "NIFTY 50", "NFO|43156": "DUMMY"},
+    )
     while True:
         print(wserver.ltp)
         time.sleep(1)

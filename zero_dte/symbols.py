@@ -27,6 +27,7 @@ class Symbols:
 
     def get_exchange_token_map_finvasia(self):
         url = f"https://api.shoonya.com/{self.exch}_symbols.txt.zip"
+        print(f"{url}")
         df = pd.read_csv(url)
         # filter the response
         df = df[
@@ -103,6 +104,6 @@ class Symbols:
 
 
 if __name__ == "__main__":
-    symbols = Symbols("NFO", "NIFTY", "07DEC23")
-    # symbols.get_exchange_token_map_finvasia()
+    symbols = Symbols("NFO", "NIFTY", "14DEC23")
+    symbols.get_exchange_token_map_finvasia()
     print(symbols.get_tokens(20250))
