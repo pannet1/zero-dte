@@ -11,15 +11,14 @@ import math
 import re
 import pendulum as pdlm
 
+
 slp = 5
 pm = PortfolioManager([], snse)
 SYMBOL = snse["SYMBOL"]
 obj_sym = Symbols("NFO", SYMBOL, snse["EXPIRY"])
 times = pdlm.parse("15:30", fmt="HH:mm").time()
 
-if common["live"] or (
-    pdlm.now().time().add(hours=common["h"], minutes=common["m"]) < times
-):
+if common["live"]:
     from omspy_brokers.finvasia import Finvasia
     from wserver import Wserver
 
@@ -36,7 +35,11 @@ if common["live"] or (
         atm = obj_sym.get_atm(lp)
         dct_tokens = obj_sym.get_tokens(atm)
         lst_tokens = list(dct_tokens.keys())
-        wserver = Wserver(brkr, lst_tokens)
+        wserver = Wserver(brkr, lst_tokens, dct_tokens)
+        quote = {}
+        while not any(quote):
+            quote = wserver.ltp
+            sleep(1)
     else:
         SystemExit(1)
 
@@ -69,8 +72,7 @@ def _prettify(lst):
 def _order_place(**args):
     print(f"order place{args}")
     args["exchange"] = "NFO"
-    args["product_type"] = "N"
-    args["order_type"] = "MKT"
+    args["product"] = "M"
     resp = brkr.order_place(**args)
     print(f"{resp=}")
 
@@ -266,8 +268,7 @@ def _update_metrics(**kwargs):
 
 
 def is_pyramid_cond(**kwargs):
-    quotes = wserver.ltp
-    kwargs["quotes"] = {dct_tokens[key]: value for key, value in quotes.items()}
+    kwargs["quotes"] = wserver.ltp
     kwargs = _update_metrics(**kwargs)
     kwargs = _calculate_allowable_quantity(**kwargs)
     kwargs["fn"] = is_trailing_cond
@@ -375,7 +376,6 @@ def is_trailing_cond(**kwargs):
                     _order_place(**pos)
             # TODO
             # kwargs.pop('fn')
-
     return kwargs
 
 
@@ -492,9 +492,7 @@ kwargs = {
 }
 kwargs = reset_trailing(**kwargs)
 kwargs = _calculate_allowable_quantity(**kwargs)
-quotes = wserver.ltp
-print(f"{quotes =}")
-kwargs["quotes"] = {dct_tokens[key]: value for key, value in quotes.items()}
+kwargs["quotes"] = wserver.ltp
 kwargs = _pyramid(**kwargs)
 kwargs["fn"] = is_pyramid_cond
 while kwargs.get("fn", "PACK_AND_GO") != "PACK_AND_GO":

@@ -11,9 +11,10 @@ class Wserver:
     socket_opened = False
     ltp = {}
 
-    def __init__(self, broker, tokens):
+    def __init__(self, broker, tokens, dct_tokens):
         self.api = broker.finvasia
         self.tokens = tokens
+        self.dct_tokens = dct_tokens
         ret = self.api.start_websocket(
             order_update_callback=self.event_handler_order_update,
             subscribe_callback=self.event_handler_quote_update,
@@ -25,8 +26,7 @@ class Wserver:
     def open_callback(self):
         self.socket_opened = True
         print("app is connected")
-        tokens = self.tokens
-        self.api.subscribe(tokens, feed_type="d")
+        self.api.subscribe(self.tokens, feed_type="d")
         # api.subscribe(['NSE|22', 'BSE|522032'])
 
     # application callbacks
@@ -44,12 +44,14 @@ class Wserver:
         # l   Low price
         # c   Close price
         # ap  Average trade price
+        #
         logging.debug(
             "quote event: {0}".format(time.strftime("%d-%m-%Y %H:%M:%S")) + str(message)
         )
         val = message.get("lp", False)
         if val:
-            self.ltp[message["e"] + "|" + message["tk"]] = val
+            exch_tkn = message["e"] + "|" + message["tk"]
+            self.ltp[self.dct_tokens[exch_tkn]] = float(val)
 
 
 if __name__ == "__main__":
@@ -64,7 +66,7 @@ if __name__ == "__main__":
         if broker.authenticate():
             print("success")
 
-    wserver = Wserver(broker, ["nse|26000"])
+    wserver = Wserver(broker, ["NSE|26000"], {"NSE|26000": "NIFTY 50"})
     while True:
         print(wserver.ltp)
         time.sleep(1)

@@ -19,23 +19,21 @@ class Mcx:
         try:
             Utilities().slp_for(1)
             df_pos = pd.DataFrame(cls.brkr.positions)
-
+            columns_to_check = [
+                "symbol",
+                "exchange",
+                "prd",
+                "token",
+                "ti",
+                "quantity",
+                "urmtom",
+                "rpnl",
+                "last_price",
+            ]
             if df_pos is not None and len(df_pos) == 0:
                 return cls.mty
-            else:
-                df_pos = df_pos[
-                    [
-                        "symbol",
-                        "exchange",
-                        "prd",
-                        "token",
-                        "ti",
-                        "quantity",
-                        "urmtom",
-                        "rpnl",
-                        "last_price",
-                    ]
-                ]
+            elif all(column in df_pos.columns for column in columns_to_check):
+                df_pos = df_pos[columns_to_check]
                 df_pos = df_pos[df_pos["exchange"] == "MCX"]
                 if cls.smcx.get("IGNORE", False):
                     df_pos = df_pos[~df_pos["symbol"].isin(cls.smcx["IGNORE"])]
@@ -51,7 +49,7 @@ class Mcx:
     def get_mcx_m2m(cls):
         df_pos = cls.get_mcx_positions()
         pretty = f"{62* ' '}"
-        if len(df_pos) > 0:
+        if df_pos and len(df_pos) > 0:
             unrl = sum(df_pos["urmtom"].values)
             real = sum(df_pos["rpnl"].values)
             totl = int(unrl + real)

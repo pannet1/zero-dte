@@ -12,17 +12,12 @@ class Paper:
         self.exchtkn = exchtkn
         self.dct_tokens = dct_tokens
 
-    def simultp(self, ltp, speed, tick=0.05):
-        new_ltp = round(ltp + (randint(-1 * speed, speed) * tick), 2)
-        if new_ltp <= 0:
-            new_ltp = tick
-        return new_ltp
-
     @property
     def ltp(self):
         dct = {}
         for token in self.exchtkn:
-            dct[token] = randint(1, 100)
+            symbol = self.dct_tokens[token]
+            dct[symbol] = randint(1, 100)
         return dct
 
     def order_place(self, **position_dict):
@@ -53,7 +48,6 @@ class Paper:
         df = df.groupby("symbol").sum().reset_index()
         dct = df.to_dict(orient="records")
         quotes = self.ltp
-        quotes = {self.dct_tokens[key]: value for key, value in quotes.items()}
         for pos in dct:
             pos["ltp"] = quotes[pos["symbol"]]
             pos["value"] = int(pos["quantity"] * pos["ltp"])
