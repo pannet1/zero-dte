@@ -11,6 +11,7 @@ filepath = "../../"
 cnfg = fils.get_lst_fm_yml(filepath + "finvasia_amar.yaml")
 settings = fils.get_lst_fm_yml(filepath + "settings.yml")
 smcx = settings["MCX"]
-snse = settings["NSE"]
-snse["PFOLIO"] = snse["PFOLIO_LAKHS"] * 100000
 common = settings["common"]
+base = settings[common["base"]]
+base["PFOLIO"] = base["PFOLIO_LAKHS"] * 100000
+print(base)

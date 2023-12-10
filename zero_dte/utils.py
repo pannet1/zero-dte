@@ -1,5 +1,8 @@
 def calc_m2m(pos):
     if pos["quantity"] > 0:
-        return (pos["quantity"] * pos["ltp"]) - pos["bought"]
+        sold = int(pos["quantity"]) * int(pos["last_price"])
+        return sold - pos["bought"]
     elif pos["quantity"] < 0:
-        return pos["sold"] - (abs(pos["quantity"]) * pos["ltp"])
+        return pos["sold"] - (abs(pos["quantity"]) * pos["last_price"])
+    elif pos["quantity"] == 0:
+        return 0

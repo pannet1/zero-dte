@@ -10,20 +10,24 @@ else:
 
 
 def orders():
-    pos = brkr.orders
+    ord = [{}]
+    ord = brkr.orders
     keys = [
-        "order_id",
+        "broker_timestamp",
         "symbol",
         "side",
         "average_price",
         "status",
         "filled_quantity",
+        "remarks"
     ]
-    pos = [{k: d[k] for k in keys} for d in pos]
-    return pos
+    if any(ord):
+        ord = [{k: d[k] for k in keys} for d in ord]
+    return ord
 
 
 def positions():
+    pos = [{}]
     pos = brkr.positions
     keys = [
         "symbol",
@@ -32,7 +36,8 @@ def positions():
         "urmtom",
         "rpnl",
     ]
-    pos = [{k: d[k] for k in keys} for d in pos]
+    if any(pos):
+        pos = [{k: d[k] for k in keys} for d in pos]
     return pos[0]
 
 

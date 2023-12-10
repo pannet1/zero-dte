@@ -17,7 +17,7 @@ def prettier(**kwargs) -> dict:
                 table.add_row(item.values())
             print(table)
         else:
-            print(k, ":", Regative(v))
+            print(f"{k}: {v}")
     print(25 * "=", " END OF REPORT ", 25 * "=", "\n")
     return kwargs
 
@@ -33,3 +33,7 @@ def _prettify(lst):
         table.add_row(dct.values())
     print(table)
 """
+
+if __name__ == "__main__":
+    kwargs = {"key": {"key2": 2}, "key2": 1}
+    prettier(**kwargs)

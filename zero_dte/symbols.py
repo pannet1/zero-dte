@@ -10,10 +10,17 @@ dct_sym = {
         "depth": 16,
     },
     "BANKNIFTY": {
-        "diff": 50,
+        "diff": 100,
         "index": "Nifty Bank",
         "exch": "NSE",
         "token": "26009",
+        "depth": 25,
+    },
+    "MIDCPNIFTY": {
+        "diff": 100,
+        "index": "Nifty Mid Select",
+        "exch": "NSE",
+        "token": "26074",
         "depth": 25,
     },
 }
@@ -32,7 +39,7 @@ class Symbols:
         # filter the response
         df = df[
             (df["Exchange"] == self.exch)
-            & (df["TradingSymbol"].str.contains(self.symbol + self.expiry))
+            # & (df["TradingSymbol"].str.contains(self.symbol + self.expiry))
         ][["Token", "TradingSymbol"]]
         # split columns with necessary values
         df[["Symbol", "Expiry", "OptionType", "StrikePrice"]] = df[

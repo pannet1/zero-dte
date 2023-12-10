@@ -1,4 +1,4 @@
-from constants import snse, logging, common, cnfg
+from constants import base, logging, common, cnfg
 from porfolio_manager import PortfolioManager
 from print import prettier
 from toolkit.digits import Digits
@@ -11,10 +11,11 @@ import re
 import pendulum as pdlm
 
 
+
 slp = 5
-pm = PortfolioManager([], snse)
-SYMBOL = snse["SYMBOL"]
-obj_sym = Symbols("NFO", SYMBOL, snse["EXPIRY"])
+pm = PortfolioManager([], base)
+SYMBOL = common["base"]
+obj_sym = Symbols(base['EXCHANGE'], SYMBOL, base["EXPIRY"])
 obj_sym.get_exchange_token_map_finvasia()
 times = pdlm.parse("15:30", fmt="HH:mm").time()
 
@@ -61,7 +62,7 @@ def last_print(text, kwargs):
 
 def _order_place(**args):
     print(f"order place{args}")
-    args["exchange"] = "NFO"
+    args["exchange"] = base['EXCHANGE']
     args["product"] = "M"
     resp = brkr.order_place(**args)
     print(f"{resp=}")
@@ -71,45 +72,57 @@ def _calculate_allowable_quantity(**kwargs):
     kwargs["lotsize"] = 0
     if (
         kwargs.get("quantity", "EMPTY") == "EMPTY"
-        or kwargs["quantity"]["sell"] < snse["MAX_QTY"]
+        or kwargs["quantity"]["sell"] < base["MAX_QTY"]
     ):
-        rough_total = snse["ENTRY_PERC"] / 100 * snse["MAX_QTY"]
-        kwargs["lotsize"] = int(rough_total / snse["LOT_SIZE"]) * snse["LOT_SIZE"]
+        rough_total = base["ENTRY_PERC"] / 100 * base["MAX_QTY"]
+        print(f"lotsize: {rough_total}")
+        rough_total = int(rough_total / base["LOT_SIZE"]) * base["LOT_SIZE"]
+        kwargs["lotsize"] = 1 if rough_total == 0 else rough_total
+        print(kwargs["lotsize"])
     return kwargs
 
 
 def _pyramid(**kwargs):
+    # sell call
     symbol = obj_sym.find_closest_premium(
-        kwargs["quotes"], snse["SEL_PREMIUM"], contains="C"
+        kwargs["quotes"], base["SEL_PREMIUM"], contains="C"
     )
-
     args = {
         "symbol": symbol,
-        "quantity": kwargs["lotsize"],
+        "quantity": kwargs["lotsize"] * base['LOT_SIZE'],
         "side": "S",
         "tag": "pyramid",
     }
     _order_place(**args)
+    # buy call
     symbol = obj_sym.find_closest_premium(
-        kwargs["quotes"], snse["SEL_PREMIUM"], contains="P"
+        kwargs["quotes"], base["BUY_PREMIUM"], contains="C"
     )
-    args = {
+    args.update({
         "symbol": symbol,
-        "quantity": kwargs["lotsize"],
-        "side": "S",
-        "tag": "pyramid",
-    }
-    _order_place(**args)
-    symbol = obj_sym.find_closest_premium(
-        kwargs["quotes"], snse["BUY_PREMIUM"], contains="P"
-    )
-    args = {
-        "symbol": symbol,
-        "quantity": kwargs["lotsize"],
         "side": "B",
-        "tag": "pyramid",
-    }
+    })
     _order_place(**args)
+    # sell put
+    symbol = obj_sym.find_closest_premium(
+        kwargs["quotes"], base["SEL_PREMIUM"], contains="P"
+    )
+    args.update({
+        "symbol": symbol,
+        "side": "S",
+    })
+    _order_place(**args)
+
+    # buy put
+    symbol = obj_sym.find_closest_premium(
+        kwargs["quotes"], base["BUY_PREMIUM"], contains="P"
+    )
+    args.update ({
+        "symbol": symbol,
+        "side": "B",
+    })
+    _order_place(**args)
+
     kwargs["positions"] = brkr.positions
     return kwargs
 
@@ -127,14 +140,14 @@ def _update_metrics(**kwargs):
         pos["value"] = int(pos["quantity"] * pos["last_price"])
         pos["m2m"] = calc_m2m(pos) if pos["quantity"] != 0 else 0
         # TODO
-        pos["rpl"] = pos["sold"] - pos["bought"] if pos["quantity"] == 0 else 0
+        pos["rpnl"] = pos["sold"] - pos["bought"] if pos["quantity"] == 0 else 0
     # positions.sort(key=lambda x: x["value"], reverse=False)
 
     # portfolio
     sell_value = sum(pos["value"] for pos in kwargs["positions"] if pos["quantity"] < 0)
     m2m = sum(pos["m2m"] for pos in kwargs["positions"])
-    rpl = sum(pos["rpl"] for pos in kwargs["positions"])
-    pnl = m2m + rpl
+    rpnl = sum(pos["rpnl"] for pos in kwargs["positions"])
+    pnl = m2m + rpnl
 
     if kwargs.get("portfolio", False):
         lowest = min(pnl, kwargs["portfolio"]["lowest"])
@@ -149,7 +162,7 @@ def _update_metrics(**kwargs):
         highest=highest,
         value=sell_value,
         m2m=m2m,
-        rpl=rpl,
+        rpnl=rpnl,
     )
 
     # quantity
@@ -163,10 +176,10 @@ def _update_metrics(**kwargs):
     )
 
     # percentages
-    max_pfolio = Digits.calc_perc(highest, snse["PFOLIO"])
-    curr_pfolio = Digits.calc_perc(pnl, snse["PFOLIO"])
+    max_pfolio = Digits.calc_perc(highest, base["PFOLIO"])
+    curr_pfolio = Digits.calc_perc(pnl, base["PFOLIO"])
     decline = round(max_pfolio - curr_pfolio, 2)
-    min_pfolio = Digits.calc_perc(lowest, snse["PFOLIO"])
+    min_pfolio = Digits.calc_perc(lowest, base["PFOLIO"])
     improve = round(curr_pfolio - min_pfolio, 2)
     kwargs["perc"] = dict(
         perc="perc",
@@ -199,13 +212,13 @@ def _update_metrics(**kwargs):
     call_value = sum(
         pos["value"]
         for pos in kwargs["positions"]
-        if re.search(re.escape(snse["EXPIRY"] + "C"), pos["symbol"])
+        if re.search(re.escape(base["EXPIRY"] + "C"), pos["symbol"])
         and pos["quantity"] < 0
     )
     put_value = sum(
         pos["value"]
         for pos in kwargs["positions"]
-        if re.search(re.escape(snse["EXPIRY"] + "P"), pos["symbol"])
+        if re.search(re.escape(base["EXPIRY"] + "P"), pos["symbol"])
         and pos["quantity"] < 0
     )
     diff = call_value - put_value
@@ -219,7 +232,7 @@ def _update_metrics(**kwargs):
         put_value=put_value,
         diff=diff,
         ratio=round(ratio, 5),
-        amount=abs(int(diff * snse["ADJUST_PERC"] / 100)),
+        amount=abs(int(diff * base["ADJUST_PERC"] / 100)),
     )
 
     kwargs["pnl"] = pnl
@@ -277,10 +290,10 @@ def is_trailing_cond(**kwargs):
             )
             if call_value_to_reduce < 0:
                 symbol = obj_sym.find_closest_premium(
-                    kwargs["quotes"], snse["SEL_PREMIUM"], contains="C"
+                    kwargs["quotes"], base["SEL_PREMIUM"], contains="C"
                 )
                 lots = math.ceil(
-                    call_value_to_reduce / kwargs["quotes"][symbol] / snse["LOT_SIZE"]
+                    call_value_to_reduce / kwargs["quotes"][symbol] / base["LOT_SIZE"]
                 )
                 kwargs = last_print(f"sell {lots=}fresh call {symbol}", kwargs)
                 args = {
@@ -302,10 +315,10 @@ def is_trailing_cond(**kwargs):
             kwargs = last_print(f"put values to reduce: { put_value_to_reduce}", kwargs)
             if put_value_to_reduce < 0:
                 symbol = obj_sym.find_closest_premium(
-                    kwargs["quotes"], snse["SEL_PREMIUM"], contains="P"
+                    kwargs["quotes"], base["SEL_PREMIUM"], contains="P"
                 )
                 lots = math.ceil(
-                    put_value_to_reduce / kwargs["quotes"][symbol] / snse["LOT_SIZE"]
+                    put_value_to_reduce / kwargs["quotes"][symbol] / base["LOT_SIZE"]
                 )
                 logging.debug(f"sell {lots=} fresh put {symbol}")
                 args = {
@@ -344,10 +357,10 @@ def adjust(**kwargs):
     pm.update(kwargs["positions"], "last_price")
     ce_or_pe = None
 
-    if kwargs["adjust"]["ratio"] >= snse["DIFF_THRESHOLD"] * 5:
+    if kwargs["adjust"]["ratio"] >= base["DIFF_THRESHOLD"] * 5:
         sleep(slp)
         ce_or_pe = "C"
-    elif kwargs["adjust"]["ratio"] <= snse["DIFF_THRESHOLD"] * -2:
+    elif kwargs["adjust"]["ratio"] <= base["DIFF_THRESHOLD"] * -2:
         sleep(slp)
         ce_or_pe = "P"
 
@@ -394,7 +407,7 @@ def adjust(**kwargs):
             print(f"{reduced_value=}")
             kwargs["fn"] = is_pyramid_cond
             return kwargs
-        if kwargs["quantity"]["sell"] >= snse["MAX_QTY"]:
+        if kwargs["quantity"]["sell"] >= base["MAX_QTY"]:
             kwargs["adjust"]["adjust"] = 4
             kwargs = last_print(f"{ce_or_pe} adjust_max_qty", kwargs)
             reduced_value, lst_of_ords = pm.reduce_value(
@@ -437,7 +450,7 @@ def close_profit_position(**kwargs):
 
 def is_portfolio_stop(**kwargs):
     kwargs["fn"] = is_pyramid_cond
-    if kwargs["perc"]["curr_pfolio"] < snse["PFOLIO_SL_PERC"]:
+    if kwargs["perc"]["curr_pfolio"] < base["PFOLIO_SL_PERC"]:
         for entry in pm.close_positions():
             entry.update({"tag": "porfolio stop"})
             _order_place(**entry)
