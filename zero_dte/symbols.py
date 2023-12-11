@@ -1,5 +1,6 @@
 import pandas as pd
 import re
+from toolkit.fileutils import Fileutils
 
 dct_sym = {
     "NIFTY": {
@@ -38,21 +39,23 @@ class Symbols:
         self.exch = exch
         self.symbol = symbol
         self.expiry = expiry
+        self.csvfile = f"./{self.exch}_symbols.csv" 
 
     def get_exchange_token_map_finvasia(self):
-        url = f"https://api.shoonya.com/{self.exch}_symbols.txt.zip"
-        print(f"{url}")
-        df = pd.read_csv(url)
-        # filter the response
-        df = df[
-            (df["Exchange"] == self.exch)
-            # & (df["TradingSymbol"].str.contains(self.symbol + self.expiry))
-        ][["Token", "TradingSymbol"]]
-        # split columns with necessary values
-        df[["Symbol", "Expiry", "OptionType", "StrikePrice"]] = df[
-            "TradingSymbol"
-        ].str.extract(r"([A-Z]+)(\d+[A-Z]+\d+)([CP])(\d+)")
-        df.to_csv(f"{self.exch}_symbols.csv", index=False)
+        if Fileutils().is_file_not_2day(self.csvfile):
+            url = f"https://api.shoonya.com/{self.exch}_symbols.txt.zip"
+            print(f"{url}")
+            df = pd.read_csv(url)
+            # filter the response
+            df = df[
+                (df["Exchange"] == self.exch)
+                # & (df["TradingSymbol"].str.contains(self.symbol + self.expiry))
+            ][["Token", "TradingSymbol"]]
+            # split columns with necessary values
+            df[["Symbol", "Expiry", "OptionType", "StrikePrice"]] = df[
+                "TradingSymbol"
+            ].str.extract(r"([A-Z]+)(\d+[A-Z]+\d+)([CP])(\d+)")
+            df.to_csv(self.csvfile, index=False)
 
     def get_atm(self, ltp) -> int:
         current_strike = ltp - (ltp % dct_sym[self.symbol]["diff"])
@@ -62,7 +65,7 @@ class Symbols:
         return int(next_higher_strike)
 
     def get_tokens(self, strike):
-        df = pd.read_csv(f"{self.exch}_symbols.csv")
+        df = pd.read_csv(self.csvfile)
         lst = []
         lst.append(self.symbol + self.expiry + "C" + str(strike))
         lst.append(self.symbol + self.expiry + "P" + str(strike))
