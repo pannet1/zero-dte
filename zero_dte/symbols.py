@@ -18,10 +18,17 @@ dct_sym = {
     },
     "MIDCPNIFTY": {
         "diff": 100,
-        "index": "Nifty Mid Select",
+        "index": "NIFTY MID SELECT",
         "exch": "NSE",
         "token": "26074",
         "depth": 21,
+    },
+    "FINNIFTY": {
+        "diff": 50,
+        "index": "Nifty Fin Services",
+        "exch": "NSE",
+        "token": "26037",
+        "depth": 16,
     },
 }
 

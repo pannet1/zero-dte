@@ -49,7 +49,7 @@ class Mcx:
     def get_mcx_m2m(cls):
         df_pos = cls.get_mcx_positions()
         pretty = f"{62* ' '}"
-        if df_pos and len(df_pos) > 0:
+        if len(df_pos) > 0:
             unrl = sum(df_pos["urmtom"].values)
             real = sum(df_pos["rpnl"].values)
             totl = int(unrl + real)
