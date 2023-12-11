@@ -7,7 +7,6 @@ from print import prettier
 class Paper:
     def __init__(self, exchtkn: list, dct_tokens: dict):
         self.orders = pd.DataFrame(
-
             columns=["entry_time", "side", "quantity", "symbol", "price", "remark"]
         )
         self.exchtkn = exchtkn
@@ -56,31 +55,43 @@ class Paper:
         keys = ['symbol', 'quantity', 'urmtom', 'rpnl', 'last_price']
         lst = [
             {k: d[k] for k in keys} for d in lst] 
+        """
+        for pos in kwargs["positions"]:
+            pos["last_price"] = kwargs["quotes"][pos["symbol"]]
+            pos["urmtom"] = calc_m2m(pos) if pos["quantity"] != 0 else 0
+            # TODO
+            pos["rpnl"] = pos["sold"] - pos["bought"] if pos["quantity"] == 0 else 0
+        """
         return lst
 
-from constants import snse
-from symbols import Symbols 
+if __name__ == "__main__":
+    from constants import base, common
+    from symbols import Symbols 
+    SYMBOL = common["base"]
+    obj_sym = Symbols(base['EXCHANGE'], SYMBOL, base["EXPIRY"])
+    obj_sym.get_exchange_token_map_finvasia()
 
-obj_sym = Symbols("NFO", snse['SYMBOL'], snse['EXPIRY'])
-dct_tokens = obj_sym.get_tokens(20250)
-lst_tokens = list(dct_tokens.keys())
-brkr = Paper(lst_tokens, dct_tokens)
-args = dict(
-    broker_timestamp=plum.now().to_time_string(),
-    side="B",
-    quantity="50",
-    symbol=snse['SYMBOL'] + snse['EXPIRY'] + "C" + "23500",
-    tag="paper",
-)
-brkr.order_place(**args)
-args.update({"side":"S", "symbol":snse['SYMBOL'] +  snse['EXPIRY'] + "P" + "22400"})
-brkr.order_place(**args)
-args.update({"side":"S", "symbol":snse['SYMBOL'] +  snse['EXPIRY'] + "P" + "22400"})
-brkr.order_place(**args)
-args.update({"side":"B", "symbol":snse['SYMBOL'] +  snse['EXPIRY'] + "P" + "22400"})
-brkr.order_place(**args)
-kwargs = {
-    "pos": brkr.positions
-}
-prettier(**kwargs)
+    dct_tokens = obj_sym.get_tokens(20250)
+    lst_tokens = list(dct_tokens.keys())
+    brkr = Paper(lst_tokens, dct_tokens)
+
+    args = dict(
+        broker_timestamp=plum.now().to_time_string(),
+        side="B",
+        quantity="50",
+        symbol=SYMBOL+ base['EXPIRY'] + "C" + "23500",
+        tag="paper",
+    )
+    brkr.order_place(**args)
+    args.update({"side":"S", "symbol": SYMBOL +  base['EXPIRY'] + "P" + "22400"})
+    brkr.order_place(**args)
+    args.update({"side":"S", "symbol": SYMBOL +  base['EXPIRY'] + "P" + "22400"})
+    brkr.order_place(**args)
+    args.update({"side":"B", "symbol": SYMBOL +  base['EXPIRY'] + "P" + "22400"})
+    brkr.order_place(**args)
+
+    kwargs = {
+        "pos": brkr.positions
+    }
+    prettier(**kwargs)
 

@@ -1,5 +1,5 @@
 from omspy_brokers.finvasia import Finvasia
-from constants import snse, logging, common, cnfg
+from constants import cnfg
 from print import prettier
 
 brkr = Finvasia(**cnfg)

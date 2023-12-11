@@ -11,7 +11,8 @@ class PortfolioManager:
     def update(self, list_of_positions=[], sort_key="value"):
         if any(list_of_positions):
             self.portfolio = list_of_positions
-        self.portfolio.sort(key=lambda x: x[sort_key], reverse=True)
+        if sort_key in self.portfolio:
+            self.portfolio.sort(key=lambda x: x[sort_key], reverse=True)
         self.portfolio = [
             {k: v for k, v in pos.items() if k != "reduced_qty"}
             for pos in self.portfolio
@@ -19,7 +20,7 @@ class PortfolioManager:
         return self.portfolio
 
     def close_positions(self):
-        self.portfolio.sort(key=lambda x: x["ltp"], reverse=True)
+        self.portfolio.sort(key=lambda x: x["last_price"], reverse=True)
 
         for entry in self.portfolio:
             if entry["quantity"] != 0:
@@ -31,7 +32,7 @@ class PortfolioManager:
                 yield pos
 
     def reduce_value(self, value_to_reduce, contains):
-        self.portfolio.sort(key=lambda x: x["ltp"], reverse=True)
+        self.portfolio.sort(key=lambda x: x["last_price"], reverse=True)
         lst = [{}]
         for entry in self.portfolio:
             if (
@@ -49,7 +50,7 @@ class PortfolioManager:
                 val_per_lot = abs(entry["value"] / entry_lot)
                 # postive target lot
                 target_lot = math.ceil(
-                    value_to_reduce / entry["ltp"] / self.snse["LOT_SIZE"]
+                    value_to_reduce / entry["last_price"] / self.snse["LOT_SIZE"]
                 )
                 print(f"{entry_lot=} {target_lot=} {val_per_lot=}")
 
@@ -73,15 +74,15 @@ class PortfolioManager:
         if any(
             re.search(re.escape(self.snse["EXPIRY"] + contains), pos["symbol"])
             and pos["quantity"] < 0
-            and pos["ltp"] > self.snse["MAX_SOLD_LTP"]
+            and pos["last_price"] > self.snse["MAX_SOLD_last_price"]
             for pos in self.portfolio
         ):
             return True
         return False
 
-    def adjust_highest_ltp(self, adjust_amount, contains=""):
+    def adjust_highest_last_price(self, adjust_amount, contains=""):
         contains = self.snse["EXPIRY"] + contains
-        self.portfolio.sort(key=lambda x: x["ltp"], reverse=True)
+        self.portfolio.sort(key=lambda x: x["last_price"], reverse=True)
         adjusted = {}
         for entry in self.portfolio:
             if entry["quantity"] < 0 and re.search(
@@ -89,7 +90,7 @@ class PortfolioManager:
             ):
                 # negative entry lot
                 target_lot = math.ceil(
-                    adjust_amount / entry["ltp"] / self.snse["LOT_SIZE"]
+                    adjust_amount / entry["last_price"] / self.snse["LOT_SIZE"]
                 )
                 target_lot = 1 if target_lot == 0 else target_lot
                 # adjust_qty
@@ -104,7 +105,7 @@ class PortfolioManager:
         for pos in self.portfolio:
             if (
                 re.search(re.escape(self.snse["EXPIRY"] + contains), pos["symbol"])
-                and pos["ltp"] < self.snse["COVER_FOR_PROFIT"]
+                and pos["last_price"] < self.snse["COVER_FOR_PROFIT"]
             ):
                 quantity = pos["quantity"]
                 break
@@ -148,10 +149,7 @@ class PortfolioManager:
 
 
 if __name__ == "__main__":
-    from pprint import pprint
+    from constants import base
 
     # Example usage of the class with the updated adjust_positions method
-    manager = PortfolioManager([], 50, 70)
-    # Positive total_to_adjust (buying)
-    total_to_adjust = 650
-    print(f"{total_to_adjust=}")
+    manager = PortfolioManager([], base)

@@ -21,7 +21,7 @@ dct_sym = {
         "index": "Nifty Mid Select",
         "exch": "NSE",
         "token": "26074",
-        "depth": 25,
+        "depth": 21,
     },
 }
 
