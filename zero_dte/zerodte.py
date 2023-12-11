@@ -18,7 +18,6 @@ def last_print(text, kwargs):
 
 
 def _order_place(**args):
-    print(kwargs)
     if common["buff_perc"] == 0:
         args["order_type"] = "MKT"
     else:
