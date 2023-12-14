@@ -19,7 +19,7 @@ def orders():
         "average_price",
         "status",
         "filled_quantity",
-        # "remarks"
+        "remarks"
     ]
     if any(ord):
         ord = [{k: d[k] for k in keys} for d in ord]

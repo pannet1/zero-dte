@@ -4,11 +4,24 @@ from print import prettier
 from toolkit.digits import Digits
 from toolkit.round_to_paise import adjust_ltp
 from symbols import Symbols, dct_sym
+import pendulum as pdlm
 from time import sleep
 from rich import print
 import math
 import re
-import pendulum as pdlm
+import os
+import json
+
+
+def append_to_json_file(data, filename):
+    if not os.path.exists(filename):
+        with open(filename, 'w') as file:
+            # If the file doesn't exist, create it with the initial data
+            json.dump(data, file, ensure_ascii=False, indent=4)
+    else:
+        # Write the updated data back to the file
+        with open(filename, 'a+') as file:
+            json.dump(data, file, ensure_ascii=False, indent=4, default=str)
 
 
 def last_print(text, kwargs):
@@ -29,6 +42,8 @@ def _order_place(**args):
     args["disclosed_quantity"] = args["quantity"]
     print(f"order place{args}")
     order_no = brkr.order_place(**args)
+    file_to_append = data + "orders.json"
+    append_to_json_file(args, file_to_append)
     print(f"{order_no=}")
 
 
@@ -221,11 +236,11 @@ def _update_metrics(**kwargs):
     now = pdlm.now()
     fname = now.format('I') + now.format('M') + now.format('S')
     fils.save_file(kwargs, data + fname)
-    sleep(slp)
     return kwargs
 
 
 def is_pyramid_cond(**kwargs):
+    sleep(slp)
     kwargs["quotes"].update(wserver.ltp)
     kwargs = _update_metrics(**kwargs)
     kwargs = _calculate_allowable_quantity(**kwargs)
@@ -354,7 +369,7 @@ def adjust(**kwargs):
         args = {}
         args.update({
             "symbol": symbol,
-            "quantity": sell_qty,
+            "quantity": sell_qty * base['LOT_SIZE'],
             "side": "S",
             "tag": tag
         })
@@ -364,7 +379,7 @@ def adjust(**kwargs):
     kwargs = _positions(**kwargs)
     ce_or_pe = None
 
-    if kwargs["adjust"]["ratio"] >= base["DIFF_THRESHOLD"] * 2:
+    if kwargs["adjust"]["ratio"] >= base["DIFF_THRESHOLD"] * 1:
         ce_or_pe = "C"
     elif kwargs["adjust"]["ratio"] <= base["DIFF_THRESHOLD"] * -1:
         ce_or_pe = "P"
@@ -385,7 +400,7 @@ def adjust(**kwargs):
                 "tag": "adjust_highest_ltp",
             }
             _order_place(**args)
-            reduced_value_order(reduced_value, "adjust_highest_ltp")
+            # reduced_value_order(reduced_value, "adjust_highest_ltp")
             kwargs['fn'] = is_pyramid_cond
         # level 2
         elif kwargs["perc"]["decline"] > 0.25:
@@ -399,7 +414,7 @@ def adjust(**kwargs):
                 if any(ord):
                     ord.update({"tag": "calculated"})
                     _order_place(**ord)
-            reduced_value_order(reduced_value, "adjust_detoriation")
+            # reduced_value_order(reduced_value, "adjust_detoriation")
             kwargs['fn'] = is_pyramid_cond
         elif kwargs["pnl"] < 0:
             kwargs = last_print(f"{ce_or_pe} adjust_negative_pnl", kwargs)
@@ -413,7 +428,7 @@ def adjust(**kwargs):
                 if any(ord):
                     ord.update({"tag": "adjust_negative_pnl"})
                     _order_place(**ord)
-            reduced_value_order(reduced_value, "adjust_negative_pnl")
+            # reduced_value_order(reduced_value, "adjust_negative_pnl")
             kwargs['fn'] = is_pyramid_cond
         elif kwargs["quantity"]["sell"] >= base["MAX_QTY"]:
             kwargs["adjust"]["adjust"] = 4
@@ -425,7 +440,7 @@ def adjust(**kwargs):
                 if any(ord):
                     ord.update({"tag": "adjust_max_qty"})
                     _order_place(**ord)
-            reduced_value_order(reduced_value, "adjust_max_qty")
+            # reduced_value_order(reduced_value, "adjust_max_qty")
             kwargs['fn'] = is_pyramid_cond
         else:
             kwargs["adjust"]["adjust"] = 5
@@ -491,7 +506,7 @@ kwargs = {
     "trailing": {"trailing": 0},
     "quotes": {}
 }
-slp = 2
+slp = 4
 pm = PortfolioManager([], base)
 SYMBOL = common["base"]
 obj_sym = Symbols(base['EXCHANGE'], SYMBOL, base["EXPIRY"])
@@ -541,8 +556,8 @@ kwargs = reset_trailing(**kwargs)
 kwargs = _calculate_allowable_quantity(**kwargs)
 # place the first entry
 kwargs = _positions(**kwargs)
-if not any(kwargs['positions']):
-    kwargs = _pyramid(**kwargs)
+# if not any(kwargs['positions']):
+kwargs = _pyramid(**kwargs)
 #
 kwargs["fn"] = is_pyramid_cond
 while kwargs.get("fn", "PACK_AND_GO") != "PACK_AND_GO":
