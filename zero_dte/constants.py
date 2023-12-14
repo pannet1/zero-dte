@@ -8,6 +8,7 @@ fils = Fileutils()
 utls = Utilities()
 
 filepath = "../../"
+data = filepath + "data/"
 cnfg = fils.get_lst_fm_yml(filepath + "finvasia_amar.yaml")
 settings = fils.get_lst_fm_yml(filepath + "settings.yml")
 smcx = settings["MCX"]

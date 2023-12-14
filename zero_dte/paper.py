@@ -7,7 +7,7 @@ from print import prettier
 class Paper:
     def __init__(self, exchtkn: list, dct_tokens: dict):
         self.orders = pd.DataFrame(
-            columns=["entry_time", "side", "quantity", "symbol", "price", "remark"]
+            columns=["entry_time", "side", "filled_quantity", "symbol", "average_price", "remark"]
         )
         self.exchtkn = exchtkn
         self.dct_tokens = dct_tokens
@@ -43,7 +43,6 @@ class Paper:
         df["bought"] = df.filled_quantity_buy * df.average_price_buy
         df["sold"] = df.filled_quantity_sell * df.average_price_sell
         df["quantity"] = df.filled_quantity_buy - df.filled_quantity_sell
-        print(df)
         df = df.groupby("symbol").sum().reset_index()
         lst = df.to_dict(orient="records")
         quotes = self.ltp

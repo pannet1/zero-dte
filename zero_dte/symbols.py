@@ -107,7 +107,7 @@ class Symbols:
         return dct["TradingSymbol"]
 
     def find_closest_premium(self, quotes, premium, contains):
-        contains = self.expiry + contains
+        contains = self.expiry + contains 
         closest_symbol = None
         closest_difference = float("inf")
 
