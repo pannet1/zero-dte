@@ -12,7 +12,12 @@ else:
 def orders():
     ord = [{}]
     ord = brkr.orders
+    if any(ord):
+        for d in ord:
+            if "remarks" not in d:
+                d["remarks"] = 'no tag'
     keys = [
+        "order_id",
         "broker_timestamp",
         "symbol",
         "side",

@@ -48,8 +48,8 @@ def _order_place(**args):
 
 
 def _positions(**kwargs):
-    kwargs['positions'] = brkr.positions
-    if any(kwargs["positions"]):
+    positions = brkr.positions
+    if any(positions):
         keys = [
             "symbol",
             "quantity",
@@ -57,26 +57,24 @@ def _positions(**kwargs):
             "urmtom",
             "rpnl",
         ]
-        for pos in kwargs["positions"]:
-            pos_copy = {key: pos[key] for key in keys if key in pos}
-            # Update the original position dictionary
-            pos.clear()
-            pos.update(pos_copy)
+        # filter by dict keys
+        positions = [{key: dct[key] for key in keys} for dct in positions]
+        # calc value
+        for pos in positions:
             pos["value"] = int(pos["quantity"] * pos["last_price"])
-        kwargs["positions"] = pm.update(kwargs['positions'], "last_price")
+        kwargs["positions"] = pm.update(positions, "last_price")
     return kwargs
 
 
 def _calculate_allowable_quantity(**kwargs):
     kwargs["lotsize"] = 0
-    sold_quantities = 0
-    if kwargs.get("quantity", False):
-        sold_quantities = kwargs["quantity"].get("sell", 0)
+    sold_quantities = kwargs["quantity"].get("sell", 0)
     entry_quantity = base["ENTRY_PERC"] / 100 * base["MAX_QTY"]
-    print(f"{entry_quantity=} entry perc / 100 * max_qty")
+    print(f"{entry_quantity=}  {base['ENTRY_PERC']} / 100 * {base['MAX_QTY']}")
     entry_lot = int(entry_quantity / base["LOT_SIZE"])
-    print(f"{entry_lot}")
-    if entry_lot > 0 and ((entry_lot * 2 * base["LOT_SIZE"]) + sold_quantities <= base['MAX_QTY']):
+    simul_qty = (entry_lot * 2 * base["LOT_SIZE"]) + sold_quantities
+    print(f"{entry_lot=}{simul_qty=}")
+    if entry_lot > 0 and simul_qty <= base['MAX_QTY']:
         kwargs['lotsize'] = entry_lot
     print(f"final lot size: {kwargs['lotsize']}")
     return kwargs
@@ -134,7 +132,6 @@ def reset_trailing(**kwargs):
 
 
 def _update_metrics(**kwargs):
-    kwargs = _positions(**kwargs)
 
     # portfolio
     sell_value = 0
@@ -233,8 +230,11 @@ def _update_metrics(**kwargs):
         amount=abs(int(diff * base["ADJUST_PERC"] / 100)),
     )
     kwargs["pnl"] = pnl
+
     now = pdlm.now()
-    fname = now.format('I') + now.format('M') + now.format('S')
+    fname = str(now.format('H')).zfill(2) + \
+        str(now.format('m')).zfill(2) + \
+        str(now.format('s')).zfill(2)
     fils.save_file(kwargs, data + fname)
     return kwargs
 
@@ -242,18 +242,18 @@ def _update_metrics(**kwargs):
 def is_pyramid_cond(**kwargs):
     sleep(slp)
     kwargs["quotes"].update(wserver.ltp)
+    kwargs = _positions(**kwargs)
     kwargs = _update_metrics(**kwargs)
     kwargs = _calculate_allowable_quantity(**kwargs)
     kwargs["fn"] = is_trailing_cond
-
     if (
         kwargs["lotsize"] > 0
-        and kwargs["last"] != "pyramid plus" or kwargs["last"] != "pyramid negative"
+        # and kwargs["last"] != "pyramid plus" or kwargs["last"] != "pyramid minus"
         and kwargs["portfolio"]["portfolio"]
     ):
+        print("xxxxxxxxxx {kwargs['lotsize']}")
         increase = kwargs["pnl"] - kwargs["portfolio"]["lowest"]
-        if (kwargs["pnl"] > kwargs["quantity"]["sell"] * base["PYRAMID_PLUS"]
-            ):
+        if (kwargs["pnl"] > kwargs["quantity"]["sell"] * base["PYRAMID_PLUS"]):
             kwargs = _pyramid(**kwargs)
             kwargs = last_print("pyramid plus", kwargs)
         elif (
@@ -261,12 +261,10 @@ def is_pyramid_cond(**kwargs):
                         base["PYRAMID_MINUS"]) and kwargs["pnl"] < 0
         ):
             kwargs = _pyramid(**kwargs)
-            kwargs = last_print("pyramid negative", kwargs)
-
+            kwargs = last_print("pyramid minus", kwargs)
     return kwargs
 
 
-# TODO should only return true or false
 def is_trailing_cond(**kwargs):
     def _exit_by_trail(**kwargs):
         """
@@ -499,12 +497,13 @@ def is_portfolio_stop(**kwargs):
 
 
 """
-    BEGIN
+    begin
 """
 kwargs = {
     "last": "Happy Trading",
     "trailing": {"trailing": 0},
-    "quotes": {}
+    "quotes": {},
+    "quantity": {},
 }
 slp = 4
 pm = PortfolioManager([], base)
