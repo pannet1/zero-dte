@@ -39,7 +39,7 @@ class Symbols:
         self.exch = exch
         self.symbol = symbol
         self.expiry = expiry
-        self.csvfile = f"./{self.exch}_symbols.csv" 
+        self.csvfile = f"./{self.exch}_symbols.csv"
 
     def get_exchange_token_map_finvasia(self):
         if Fileutils().is_file_not_2day(self.csvfile):
@@ -107,7 +107,7 @@ class Symbols:
         return dct["TradingSymbol"]
 
     def find_closest_premium(self, quotes, premium, contains):
-        contains = self.expiry + contains 
+        contains = self.expiry + contains
         closest_symbol = None
         closest_difference = float("inf")
 
@@ -118,6 +118,11 @@ class Symbols:
                     closest_difference = difference
                     closest_symbol = symbol
         return closest_symbol
+
+    def calc_straddle_value(self, atm: int, quotes: list):
+        ce = self.symbol + self.expiry + "C" + str(atm)
+        pe = self.symbol + self.expiry + "P" + str(atm)
+        return quotes[ce] + quotes[pe]
 
 
 if __name__ == "__main__":

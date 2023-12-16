@@ -1,9 +1,12 @@
 from constants import base, logging, common, cnfg, data, fils
-from porfolio_manager import PortfolioManager
+from omspy_brokers.finvasia import Finvasia
+from wserver import Wserver
+from portfolio_manager import PortfolioManager
+from paper import Paper
+from symbols import Symbols, dct_sym
 from print import prettier
 from toolkit.digits import Digits
 from toolkit.round_to_paise import adjust_ltp
-from symbols import Symbols, dct_sym
 import pendulum as pdlm
 from time import sleep
 from rich import print
@@ -13,7 +16,10 @@ import os
 import json
 
 
-def append_to_json_file(data, filename):
+PAPER_ATM = 47100
+
+
+def append_to_json(data, filename):
     if not os.path.exists(filename):
         with open(filename, 'w') as file:
             # If the file doesn't exist, create it with the initial data
@@ -30,6 +36,20 @@ def last_print(text, kwargs):
     return kwargs
 
 
+def atm_price():
+    if isinstance(brkr, Finvasia):
+        atm = 0
+        resp = brkr.finvasia.get_quotes(
+            dct_sym[SYMBOL]["exch"], dct_sym[SYMBOL]["token"])
+        if resp and resp.get("lp", False):
+            lp = int(float(resp["lp"]))
+            atm = obj_sym.get_atm(lp)
+            print(f"{atm=}")
+    else:
+        atm = PAPER_ATM
+    return atm
+
+
 def _order_place(**args):
     if common["buff_perc"] == 0:
         args["order_type"] = "MKT"
@@ -43,7 +63,7 @@ def _order_place(**args):
     print(f"order place{args}")
     order_no = brkr.order_place(**args)
     file_to_append = data + "orders.json"
-    append_to_json_file(args, file_to_append)
+    append_to_json(args, file_to_append)
     print(f"{order_no=}")
 
 
@@ -61,8 +81,13 @@ def _positions(**kwargs):
         positions = [{key: dct[key] for key in keys} for dct in positions]
         # calc value
         for pos in positions:
-            pos["value"] = int(pos["quantity"] * pos["last_price"])
-        kwargs["positions"] = pm.update(positions, "last_price")
+            ltp = min(pos["last_price"], kwargs["quantity"]["straddle"])
+            pos["value"] = int(pos["quantity"] * ltp)
+        # remove negative values
+        positions = [pos for pos in positions if pos["quantity"] != 0]
+        # remove positions that does not begin with symbol name
+        positions = [pos for pos in positions if pos["symbol"].startswith(kwargs["quantity"]["quantity"])]
+        kwargs["positions"] = pm.update(positions)
     return kwargs
 
 
@@ -132,7 +157,6 @@ def reset_trailing(**kwargs):
 
 
 def _update_metrics(**kwargs):
-
     # portfolio
     sell_value = 0
     for pos in kwargs["positions"]:
@@ -166,9 +190,7 @@ def _update_metrics(**kwargs):
             sell += abs(pos['quantity'])
     buy = sum(pos["quantity"]
               for pos in kwargs["positions"] if pos["quantity"] > 0)
-    kwargs["quantity"] = dict(
-        quantity="quantity", sell=sell, buy=buy, total=buy - sell
-    )
+    kwargs["quantity"].update({"sell": sell, "buy": buy, "total": buy - sell})
 
     # percentages
     max_pfolio = Digits.calc_perc(highest, base["PFOLIO"])
@@ -223,6 +245,7 @@ def _update_metrics(**kwargs):
         adjust_mode = kwargs["adjust"]["adjust"]
     kwargs["adjust"] = dict(
         adjust=adjust_mode,
+        max_qty=base['ADJUST_MAX_QTY'],
         call_value=call_value,
         put_value=put_value,
         diff=diff,
@@ -242,18 +265,20 @@ def _update_metrics(**kwargs):
 def is_pyramid_cond(**kwargs):
     sleep(slp)
     kwargs["quotes"].update(wserver.ltp)
+    kwargs["quantity"]["atm"] = atm_price()
+    kwargs["quantity"]["straddle"] = obj_sym.calc_straddle_value(
+        kwargs["quantity"]["atm"], kwargs["quotes"])
     kwargs = _positions(**kwargs)
     kwargs = _update_metrics(**kwargs)
     kwargs = _calculate_allowable_quantity(**kwargs)
     kwargs["fn"] = is_trailing_cond
     if (
         kwargs["lotsize"] > 0
-        # and kwargs["last"] != "pyramid plus" or kwargs["last"] != "pyramid minus"
+        and kwargs["last"] != "pyramid plus" or kwargs["last"] != "pyramid minus"
         and kwargs["portfolio"]["portfolio"]
     ):
-        print("xxxxxxxxxx {kwargs['lotsize']}")
         increase = kwargs["pnl"] - kwargs["portfolio"]["lowest"]
-        if (kwargs["pnl"] > kwargs["quantity"]["sell"] * base["PYRAMID_PLUS"]):
+        if kwargs["pnl"] > (kwargs["quantity"]["sell"] * base["PYRAMID_PLUS"]):
             kwargs = _pyramid(**kwargs)
             kwargs = last_print("pyramid plus", kwargs)
         elif (
@@ -410,7 +435,7 @@ def adjust(**kwargs):
                 reduced_value  # expected neg reduced_value
             for ord in lst_of_ords:
                 if any(ord):
-                    ord.update({"tag": "calculated"})
+                    ord.update({"tag": "adjust_detoriation"})
                     _order_place(**ord)
             # reduced_value_order(reduced_value, "adjust_detoriation")
             kwargs['fn'] = is_pyramid_cond
@@ -428,9 +453,10 @@ def adjust(**kwargs):
                     _order_place(**ord)
             # reduced_value_order(reduced_value, "adjust_negative_pnl")
             kwargs['fn'] = is_pyramid_cond
-        elif kwargs["quantity"]["sell"] >= base["MAX_QTY"]:
+        elif kwargs["quantity"]["sell"] >= base["ADJUST_MAX_QTY"]:
             kwargs["adjust"]["adjust"] = 4
-            kwargs = last_print(f"{ce_or_pe} adjust_max_qty", kwargs)
+            kwargs = last_print(
+                f"{ce_or_pe} {kwargs['quantity']['sell']} >= adjust_max_qty {base['ADJUST_MAX_QTY']}", kwargs)
             reduced_value, lst_of_ords = pm.reduce_value(
                 kwargs["adjust"]["amount"], contains=ce_or_pe
             )
@@ -441,9 +467,10 @@ def adjust(**kwargs):
             # reduced_value_order(reduced_value, "adjust_max_qty")
             kwargs['fn'] = is_pyramid_cond
         else:
+            ce_or_pe = "P" if ce_or_pe == "C" else "P"
             kwargs["adjust"]["adjust"] = 5
             symbol = obj_sym.find_closest_premium(
-                kwargs['quotes'], base['ADJUST_BUY_PREMIUM'], ce_or_pe)
+                kwargs['quotes'], base['ADJUST_SEL_PREMIUM'], ce_or_pe)
             ltp = kwargs['quotes'][symbol]
             calculated = math.ceil(
                 kwargs["adjust"]["amount"] / ltp / base['LOT_SIZE'])
@@ -454,8 +481,8 @@ def adjust(**kwargs):
             args.update({
                 "symbol": symbol,
                 "quantity": buy_qty * base['LOT_SIZE'],
-                "side": "B",
-                "tag": "adjust_fresh_buy"
+                "side": "S",
+                "tag": "adjust_fresh_sell"
             })
             _order_place(**args)
             kwargs['fn'] = is_pyramid_cond
@@ -499,56 +526,42 @@ def is_portfolio_stop(**kwargs):
 """
     begin
 """
+SYMBOL = common["base"]
 kwargs = {
     "last": "Happy Trading",
     "trailing": {"trailing": 0},
     "quotes": {},
-    "quantity": {},
+    "quantity": {"quantity": SYMBOL}
 }
-slp = 4
+slp = 2
 pm = PortfolioManager([], base)
-SYMBOL = common["base"]
 obj_sym = Symbols(base['EXCHANGE'], SYMBOL, base["EXPIRY"])
 obj_sym.get_exchange_token_map_finvasia()
 times = pdlm.parse("15:30", fmt="HH:mm").time()
 
 if common["live"]:
-    from omspy_brokers.finvasia import Finvasia
-    from wserver import Wserver
-
     brkr = Finvasia(**cnfg)
     if not brkr.authenticate():
         logging.error("Failed to authenticate")
         SystemExit(1)
     else:
-        print("success")
-
-    resp = brkr.finvasia.get_quotes(
-        dct_sym[SYMBOL]["exch"], dct_sym[SYMBOL]["token"])
-    if resp and resp.get("lp", False):
-        lp = int(float(resp["lp"]))
-        atm = obj_sym.get_atm(lp)
-        print(f"{atm=}")
+        atm = atm_price()
+        kwargs['quantity']['atm'] = atm
         dct_tokens = obj_sym.get_tokens(atm)
         lst_tokens = list(dct_tokens.keys())
         wserver = Wserver(brkr, lst_tokens, dct_tokens)
-        while not any(kwargs['quotes']):
-            print("waiting for quote \n")
-            kwargs['quotes'] = wserver.ltp
-            sleep(1)
-    else:
-        print("exiting system")
-        SystemExit(1)
 
 else:
-    from paper import Paper
-    atm = 47100
-    dct_tokens = obj_sym.get_tokens(atm)
+    kwargs['quantity']['atm'] = PAPER_ATM
+    dct_tokens = obj_sym.get_tokens(PAPER_ATM)
     lst_tokens = list(dct_tokens.keys())
     brkr = Paper(lst_tokens, dct_tokens)
     wserver = brkr
-    kwargs['quotes'] = wserver.ltp
 
+while not any(kwargs['quotes']):
+    print("waiting for quote \n")
+    kwargs['quotes'] = wserver.ltp
+    sleep(1)
 # init trailing variables
 kwargs = reset_trailing(**kwargs)
 # init lot size
