@@ -4,10 +4,12 @@ import pandas as pd
 from utils import calc_m2m
 from print import prettier
 
+
 class Paper:
     def __init__(self, exchtkn: list, dct_tokens: dict):
         self.orders = pd.DataFrame(
-            columns=["entry_time", "side", "filled_quantity", "symbol", "average_price", "remark"]
+            columns=["entry_time", "side", "filled_quantity",
+                     "symbol", "average_price", "remark"]
         )
         self.exchtkn = exchtkn
         self.dct_tokens = dct_tokens
@@ -30,13 +32,16 @@ class Paper:
             average_price=position_dict.get("prc", randint(1, 200)),
             remarks=position_dict["tag"],
         )
-        self.orders = pd.concat([self.orders, pd.DataFrame([args])], ignore_index=True)
+        self.orders = pd.concat(
+            [self.orders, pd.DataFrame([args])], ignore_index=True)
 
     @property
     def positions(self):
         df = self.orders
-        df_buy = df[df.side == "B"][["symbol", "filled_quantity", "average_price"]]
-        df_sell = df[df.side == "S"][["symbol", "filled_quantity", "average_price"]]
+        df_buy = df[df.side == "B"][[
+            "symbol", "filled_quantity", "average_price"]]
+        df_sell = df[df.side == "S"][[
+            "symbol", "filled_quantity", "average_price"]]
         df = pd.merge(
             df_buy, df_sell, on="symbol", suffixes=("_buy", "_sell"), how="outer"
         ).fillna(0)
@@ -45,15 +50,15 @@ class Paper:
         df["quantity"] = df.filled_quantity_buy - df.filled_quantity_sell
         df = df.groupby("symbol").sum().reset_index()
         lst = df.to_dict(orient="records")
-        quotes = self.ltp
         for pos in lst:
-            pos["last_price"]= randint(1,200)
+            pos["last_price"] = randint(1, 200)
             pos["urmtom"] = pos["quantity"]
             pos["urmtom"] = calc_m2m(pos)
-            pos["rpnl"] = (pos["sold"] - pos["bought"]) if pos["quantity"] == 0 else 0
+            pos["rpnl"] = (pos["sold"] - pos["bought"]
+                           ) if pos["quantity"] == 0 else 0
         keys = ['symbol', 'quantity', 'urmtom', 'rpnl', 'last_price']
         lst = [
-            {k: d[k] for k in keys} for d in lst] 
+            {k: d[k] for k in keys} for d in lst]
         """
         for pos in kwargs["positions"]:
             pos["last_price"] = kwargs["quotes"][pos["symbol"]]
@@ -63,9 +68,10 @@ class Paper:
         """
         return lst
 
+
 if __name__ == "__main__":
     from constants import base, common
-    from symbols import Symbols 
+    from symbols import Symbols
     SYMBOL = common["base"]
     obj_sym = Symbols(base['EXCHANGE'], SYMBOL, base["EXPIRY"])
     obj_sym.get_exchange_token_map_finvasia()
@@ -78,19 +84,21 @@ if __name__ == "__main__":
         broker_timestamp=plum.now().to_time_string(),
         side="B",
         quantity="50",
-        symbol=SYMBOL+ base['EXPIRY'] + "C" + "23500",
+        symbol=SYMBOL + base['EXPIRY'] + "C" + "23500",
         tag="paper",
     )
     brkr.order_place(**args)
-    args.update({"side":"S", "symbol": SYMBOL +  base['EXPIRY'] + "P" + "22400"})
+    args.update({"side": "S", "symbol": SYMBOL +
+                base['EXPIRY'] + "P" + "22400"})
     brkr.order_place(**args)
-    args.update({"side":"S", "symbol": SYMBOL +  base['EXPIRY'] + "P" + "22400"})
+    args.update({"side": "S", "symbol": SYMBOL +
+                base['EXPIRY'] + "P" + "22400"})
     brkr.order_place(**args)
-    args.update({"side":"B", "symbol": SYMBOL +  base['EXPIRY'] + "P" + "22400"})
+    args.update({"side": "B", "symbol": SYMBOL +
+                base['EXPIRY'] + "P" + "22400"})
     brkr.order_place(**args)
 
     kwargs = {
         "pos": brkr.positions
     }
     prettier(**kwargs)
-

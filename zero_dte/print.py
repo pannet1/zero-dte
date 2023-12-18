@@ -18,7 +18,7 @@ def prettier(**kwargs) -> dict:
             print(table)
         else:
             print(f"{k}: {v}")
-    #print(25 * "=", " END OF REPORT ", 25 * "=", "\n")
+    # print(25 * "=", " END OF REPORT ", 25 * "=", "\n")
     return kwargs
 
 

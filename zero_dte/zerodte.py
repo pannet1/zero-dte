@@ -17,7 +17,7 @@ import json
 import sys
 
 
-slp = 2
+slp = 1
 PAPER_ATM = 47100
 SYMBOL = common["base"]
 kwargs = {
@@ -77,7 +77,6 @@ def _order_place(**args):
         args["price"] = adjust_ltp(last_price, dir * common["buff_perc"], 0.05)
     args["exchange"] = base['EXCHANGE']
     args["disclosed_quantity"] = args["quantity"]
-    print(f"order place: {args}")
     brkr.order_place(**args)
     file_to_append = data + "orders.json"
     append_to_json(args, file_to_append)
@@ -113,13 +112,10 @@ def _calculate_allowable_quantity(**kwargs):
     kwargs["lotsize"] = 0
     sold_quantities = kwargs["quantity"].get("sell", 0)
     entry_quantity = base["ENTRY_PERC"] / 100 * base["MAX_QTY"]
-    print(f"{entry_quantity=}  {base['ENTRY_PERC']} / 100 * {base['MAX_QTY']}")
     entry_lot = int(entry_quantity / base["LOT_SIZE"])
     simul_qty = (entry_lot * 2 * base["LOT_SIZE"]) + sold_quantities
-    print(f"{entry_lot=}{simul_qty=}")
     if entry_lot > 0 and simul_qty <= base['MAX_QTY']:
         kwargs['lotsize'] = entry_lot
-    print(f"final lot size: {kwargs['lotsize']}")
     return kwargs
 
 
@@ -226,7 +222,6 @@ def _update_metrics(**kwargs):
         kwargs["trailing"]["perc_decline"] = (
             kwargs["trailing"]["reset_high"] - curr_pfolio
         )
-
         if (
             kwargs["trailing"]["trailing"] == 0
             and kwargs["trailing"]["perc_decline"] >= 1
@@ -393,7 +388,7 @@ def is_trailing_cond(**kwargs):
 
 
 # delete
-def reduced_value_order(reduced_value, tag=""):
+def reduced_value_order(reduced_value, ce_or_pe, tag=""):
     symbol = obj_sym.find_closest_premium(
         kwargs['quotes'], base['ADJUST_SEL_PREMIUM'], ce_or_pe)
     ltp = kwargs['quotes'][symbol]
