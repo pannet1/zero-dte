@@ -53,7 +53,7 @@ def last_print(text, kwargs):
     return kwargs
 
 
-def atm_price():
+def atm_price(brkr):
     if isinstance(brkr, Finvasia):
         sleep(slp)
         atm = 0
@@ -271,7 +271,7 @@ def is_pyramid_cond(**kwargs):
     kwargs["fn"] = is_trailing_cond
     kwargs["quotes"].update(wserver.ltp)
     try:
-        kwargs["quantity"]["atm"] = atm_price()
+        kwargs["quantity"]["atm"] = atm_price(brkr)
     except Exception as e:
         logging.debug(f"{e} unable to get atm price")
     kwargs["quantity"]["straddle"] = obj_sym.calc_straddle_value(
@@ -536,7 +536,7 @@ def get_brkr_and_wserver():
             logging.error("Failed to authenticate")
             sys.exit(0)
         else:
-            atm = atm_price()
+            atm = atm_price(brkr)
             kwargs['quantity']['atm'] = atm
             dct_tokens = obj_sym.get_tokens(atm)
             lst_tokens = list(dct_tokens.keys())
