@@ -1,8 +1,7 @@
-# add typing with future compatablity
-from __future__ import annotations
 import math
 import re
 from constants import logging
+from typing import Literal
 
 
 class PortfolioManager:
@@ -11,14 +10,11 @@ class PortfolioManager:
         self.base = base
 
     def update(self, list_of_positions: list[dict]):
-        if any(list_of_positions):
-            if "value" in list_of_positions:
-                list_of_positions.sort(key=lambda x: x["value"], reverse=True)
         self.portfolio = list_of_positions
         return self.portfolio
 
     def close_positions(self):
-        self.portfolio.sort(key=lambda x: x["value"], reverse=True)
+        self._sort("value")
         for entry in self.portfolio:
             if entry["quantity"] != 0:
                 pos = dict(
@@ -28,8 +24,8 @@ class PortfolioManager:
                 )
                 yield pos
 
-    def reduce_value(self, current_value: int, contains="P" or "C"):
-        self.portfolio.sort(key=lambda x: x["last_price"], reverse=False)
+    def reduce_value(self, current_value: int, contains: Literal["C", "P"]):
+        self._sort("value")
         lst = [{}]
         for entry in self.portfolio:
             if (
@@ -61,9 +57,15 @@ class PortfolioManager:
                 lst.append(pos)
         return current_value, lst  # Return the resulting current_value in negative
 
-    def adjust_highest_ltp(self, requested_value=int, contains="P" or "C"):
+    def _sort(self, sort_key, is_desc=False):
+        if any(self.portfolio):
+            if sort_key in self.portfolio[0]:
+                self.portfolio.sort(
+                    key=lambda x: x[sort_key], reverse=is_desc)
+
+    def adjust_highest_ltp(self, requested_value: int, contains: Literal["C", "P"]):
+        self._sort("last_price", False)
         contains = self.base["EXPIRY"] + contains
-        self.portfolio.sort(key=lambda x: x["last_price"], reverse=False)
         pos = {}
         val_for_this = 0
         for entry in self.portfolio:
@@ -90,7 +92,8 @@ class PortfolioManager:
                 break
         return val_for_this, pos
 
-    def close_profiting_position(self, contains="P" or "C") -> int:
+    def close_profiting_position(self, contains: Literal["C", "P"]) -> int:
+        self._sort("value")
         quantity = 0
         for pos in self.portfolio:
             if (
@@ -102,7 +105,7 @@ class PortfolioManager:
                 break
         return quantity
 
-    def is_above_highest_ltp(self, contains="P" or "C") -> bool:
+    def is_above_highest_ltp(self, contains: Literal["C", "P"]) -> bool:
         if any(
             re.search(re.escape(self.base["EXPIRY"] + contains), pos["symbol"])
             and pos["quantity"] < 0
@@ -116,4 +119,18 @@ class PortfolioManager:
 if __name__ == "__main__":
     from constants import base
     # Example usage of the class with the updated adjust_positions method
-    manager = PortfolioManager([], base)
+    portfolio_manager = PortfolioManager([], base)
+
+# Sample data
+    sample_data = [
+        {"symbol": "AAPL", "value": -2000},
+        {"symbol": "GOOGL", "value": 1500},
+        {"symbol": "MSFT", "value": 1800},
+        {"symbol": "AMZN", "value": 2500},
+    ]
+
+# Call the update method with the sample data
+    sorted_portfolio = portfolio_manager.update(sample_data)
+
+# Display the sorted portfolio
+    print(sorted_portfolio)

@@ -14,9 +14,26 @@ import math
 import re
 import os
 import json
+import sys
 
 
+slp = 2
 PAPER_ATM = 47100
+SYMBOL = common["base"]
+kwargs = {
+    "quotes": {},
+    "quantity": {"quantity": SYMBOL},
+    "perc": {"perc": "perc"},
+    "adjust": {"adjust": 0},
+    "trailing": {"trailing": 0},
+    "positions": [],
+    "portfolio": {"is_pyramid": True},
+    "last": "Happy Trading",
+}
+
+pm = PortfolioManager([], base)
+obj_sym = Symbols(base['EXCHANGE'], SYMBOL, base["EXPIRY"])
+obj_sym.get_exchange_token_map_finvasia()
 
 
 def append_to_json(data, filename):
@@ -38,13 +55,13 @@ def last_print(text, kwargs):
 
 def atm_price():
     if isinstance(brkr, Finvasia):
+        sleep(slp)
         atm = 0
         resp = brkr.finvasia.get_quotes(
             dct_sym[SYMBOL]["exch"], dct_sym[SYMBOL]["token"])
         if resp and resp.get("lp", False):
             lp = int(float(resp["lp"]))
             atm = obj_sym.get_atm(lp)
-            print(f"{atm=}")
     else:
         atm = PAPER_ATM
     return atm
@@ -60,34 +77,35 @@ def _order_place(**args):
         args["price"] = adjust_ltp(last_price, dir * common["buff_perc"], 0.05)
     args["exchange"] = base['EXCHANGE']
     args["disclosed_quantity"] = args["quantity"]
-    print(f"order place{args}")
-    order_no = brkr.order_place(**args)
+    print(f"order place: {args}")
+    brkr.order_place(**args)
     file_to_append = data + "orders.json"
     append_to_json(args, file_to_append)
-    print(f"{order_no=}")
 
 
 def _positions(**kwargs):
+    sleep(slp)
     positions = brkr.positions
-    if any(positions):
-        keys = [
-            "symbol",
-            "quantity",
-            "last_price",
-            "urmtom",
-            "rpnl",
-        ]
-        # filter by dict keys
-        positions = [{key: dct[key] for key in keys} for dct in positions]
-        # calc value
-        for pos in positions:
-            ltp = min(pos["last_price"], kwargs["quantity"]["straddle"])
-            pos["value"] = int(pos["quantity"] * ltp)
-        # remove negative values
-        positions = [pos for pos in positions if pos["quantity"] != 0]
-        # remove positions that does not begin with symbol name
-        positions = [pos for pos in positions if pos["symbol"].startswith(kwargs["quantity"]["quantity"])]
-        kwargs["positions"] = pm.update(positions)
+    keys = [
+        "symbol",
+        "quantity",
+        "last_price",
+        "urmtom",
+        "rpnl",
+    ]
+    # filter by dict keys
+    positions = [{key: dct[key] for key in keys} for dct in positions]
+    # calc value
+    for pos in positions:
+        straddle = kwargs["quantity"].get('straddle', pos["last_price"])
+        ltp = min(pos["last_price"], straddle)
+        pos["value"] = int(pos["quantity"] * ltp)
+    # remove negative values
+    positions = [pos for pos in positions if pos["quantity"] != 0]
+    # remove positions that does not begin with symbol name
+    positions = [pos for pos in positions if pos["symbol"].startswith(
+        kwargs["quantity"]["quantity"])]
+    kwargs["positions"] = pm.update(positions)
     return kwargs
 
 
@@ -145,8 +163,7 @@ def _pyramid(**kwargs):
         "side": "B",
     })
     _order_place(**args)
-
-    kwargs["positions"] = _positions
+    kwargs = _positions(**kwargs)
     return kwargs
 
 
@@ -162,26 +179,20 @@ def _update_metrics(**kwargs):
     for pos in kwargs["positions"]:
         if pos["quantity"] < 0:
             sell_value += pos["value"]
-
     urmtom = sum(pos["urmtom"] for pos in kwargs["positions"])
     rpnl = sum(pos["rpnl"] for pos in kwargs["positions"])
     pnl = urmtom + rpnl
-
-    if kwargs.get("portfolio", False):
-        lowest = min(pnl, kwargs["portfolio"]["lowest"])
-        highest = max(pnl, kwargs["portfolio"]["highest"])
-    else:
-        lowest = pnl
-        highest = pnl
-
-    kwargs["portfolio"] = dict(
-        portfolio=True,
-        lowest=lowest,
-        highest=highest,
-        value=sell_value,
-        urmtom=urmtom,
-        rpnl=rpnl,
-    )
+    lowest = min(pnl, kwargs["portfolio"].get("lowest", pnl))
+    highest = max(pnl, kwargs["portfolio"].get("highest", pnl))
+    kwargs["portfolio"].update(
+        {
+            "lowest": lowest,
+            "highest": highest,
+            "value": sell_value,
+            "urmtom": urmtom,
+            "rpnl": rpnl,
+            "PNL": pnl
+        })
 
     # quantity
     sell = 0
@@ -252,7 +263,6 @@ def _update_metrics(**kwargs):
         ratio=round(ratio, 5),
         amount=abs(int(diff * base["ADJUST_PERC"] / 100)),
     )
-    kwargs["pnl"] = pnl
 
     now = pdlm.now()
     fname = str(now.format('H')).zfill(2) + \
@@ -263,27 +273,29 @@ def _update_metrics(**kwargs):
 
 
 def is_pyramid_cond(**kwargs):
-    sleep(slp)
+    kwargs["fn"] = is_trailing_cond
     kwargs["quotes"].update(wserver.ltp)
-    kwargs["quantity"]["atm"] = atm_price()
+    try:
+        kwargs["quantity"]["atm"] = atm_price()
+    except Exception as e:
+        logging.debug(f"{e} unable to get atm price")
     kwargs["quantity"]["straddle"] = obj_sym.calc_straddle_value(
         kwargs["quantity"]["atm"], kwargs["quotes"])
     kwargs = _positions(**kwargs)
-    kwargs = _update_metrics(**kwargs)
     kwargs = _calculate_allowable_quantity(**kwargs)
-    kwargs["fn"] = is_trailing_cond
+    kwargs = _update_metrics(**kwargs)
     if (
         kwargs["lotsize"] > 0
         and kwargs["last"] != "pyramid plus" or kwargs["last"] != "pyramid minus"
-        and kwargs["portfolio"]["portfolio"]
+        and kwargs["portfolio"]["is_pyramid"]
     ):
-        increase = kwargs["pnl"] - kwargs["portfolio"]["lowest"]
-        if kwargs["pnl"] > (kwargs["quantity"]["sell"] * base["PYRAMID_PLUS"]):
+        increase = kwargs["portfolio"]["PNL"] - kwargs["portfolio"]["lowest"]
+        if kwargs["portfolio"]["PNL"] > (kwargs["quantity"]["sell"] * base["PYRAMID_PLUS"]):
             kwargs = _pyramid(**kwargs)
             kwargs = last_print("pyramid plus", kwargs)
         elif (
             increase > (kwargs["quantity"]["sell"] *
-                        base["PYRAMID_MINUS"]) and kwargs["pnl"] < 0
+                        base["PYRAMID_MINUS"]) and kwargs["portfolio"]["PNL"] < 0
         ):
             kwargs = _pyramid(**kwargs)
             kwargs = last_print("pyramid minus", kwargs)
@@ -332,7 +344,6 @@ def is_trailing_cond(**kwargs):
                     "tag": "trail",
                 }
                 _order_place(**args)
-            # TODO
             put_value_to_reduce, lst_of_ords = pm.reduce_value(
                 value_to_reduce, contains="P"
             )
@@ -377,29 +388,29 @@ def is_trailing_cond(**kwargs):
                 if any(pos):
                     pos.update({"tag": "EXIT_BY_TRAIL"})
                     _order_place(**pos)
-            # TODO
             kwargs.pop('fn')
     return kwargs
 
 
-def adjust(**kwargs):
-    def reduced_value_order(reduced_value, tag=""):
-        symbol = obj_sym.find_closest_premium(
-            kwargs['quotes'], base['ADJUST_SEL_PREMIUM'], ce_or_pe)
-        ltp = kwargs['quotes'][symbol]
-        calculated = math.ceil(reduced_value / ltp / base['LOT_SIZE'])
-        sell_qty = 1 if calculated == 0 else calculated
-        args = {}
-        args.update({
-            "symbol": symbol,
-            "quantity": sell_qty * base['LOT_SIZE'],
-            "side": "S",
-            "tag": tag
-        })
-        _order_place(**args)
+# delete
+def reduced_value_order(reduced_value, tag=""):
+    symbol = obj_sym.find_closest_premium(
+        kwargs['quotes'], base['ADJUST_SEL_PREMIUM'], ce_or_pe)
+    ltp = kwargs['quotes'][symbol]
+    calculated = math.ceil(reduced_value / ltp / base['LOT_SIZE'])
+    sell_qty = 1 if calculated == 0 else calculated
+    args = {}
+    args.update({
+        "symbol": symbol,
+        "quantity": sell_qty * base['LOT_SIZE'],
+        "side": "S",
+        "tag": tag
+    })
+    _order_place(**args)
 
+
+def adjust(**kwargs):
     kwargs["fn"] = profit
-    kwargs = _positions(**kwargs)
     ce_or_pe = None
 
     if kwargs["adjust"]["ratio"] >= base["DIFF_THRESHOLD"] * 1:
@@ -439,7 +450,7 @@ def adjust(**kwargs):
                     _order_place(**ord)
             # reduced_value_order(reduced_value, "adjust_detoriation")
             kwargs['fn'] = is_pyramid_cond
-        elif kwargs["pnl"] < 0:
+        elif kwargs["portfolio"]["PNL"] < 0:
             kwargs = last_print(f"{ce_or_pe} adjust_negative_pnl", kwargs)
             kwargs["adjust"]["adjust"] = 3
             reduced_value, lst_of_ords = pm.reduce_value(
@@ -492,10 +503,10 @@ def adjust(**kwargs):
 def profit(**kwargs):
     kwargs["fn"] = close_profit_position
     if kwargs["perc"]["decline"] > 2.5:
-        kwargs["portfolio"]["portfolio"] = False
+        kwargs["portfolio"]["is_pyramid"] = False
         kwargs = last_print("portfolio decline: pyrmid disabled", kwargs)
     elif kwargs["perc"]["improve"] > 2.5:
-        kwargs["portfolio"]["portfolio"] = True
+        kwargs["portfolio"]["is_pyramid"] = True
         kwargs = last_print("portfolio improve: pyrmid enabled", kwargs)
     return kwargs
 
@@ -516,63 +527,54 @@ def is_portfolio_stop(**kwargs):
     kwargs["fn"] = is_pyramid_cond
     if kwargs["perc"]["curr_pfolio"] < base["PFOLIO_SL_PERC"]:
         for entry in pm.close_positions():
-            entry.update({"tag": "porfolio stop"})
+            entry.update({"tag": "portfolio stop"})
             _order_place(**entry)
         kwargs = last_print("portfolio stop hit", kwargs)
         kwargs.pop("fn")
     return kwargs
 
 
-"""
-    begin
-"""
-SYMBOL = common["base"]
-kwargs = {
-    "last": "Happy Trading",
-    "trailing": {"trailing": 0},
-    "quotes": {},
-    "quantity": {"quantity": SYMBOL}
-}
-slp = 2
-pm = PortfolioManager([], base)
-obj_sym = Symbols(base['EXCHANGE'], SYMBOL, base["EXPIRY"])
-obj_sym.get_exchange_token_map_finvasia()
-times = pdlm.parse("15:30", fmt="HH:mm").time()
-
-if common["live"]:
-    brkr = Finvasia(**cnfg)
-    if not brkr.authenticate():
-        logging.error("Failed to authenticate")
-        SystemExit(1)
+def get_brkr_and_wserver():
+    if common["live"]:
+        brkr = Finvasia(**cnfg)
+        if not brkr.authenticate():
+            logging.error("Failed to authenticate")
+            sys.exit(0)
+        else:
+            atm = atm_price()
+            kwargs['quantity']['atm'] = atm
+            dct_tokens = obj_sym.get_tokens(atm)
+            lst_tokens = list(dct_tokens.keys())
+            wserver = Wserver(brkr, lst_tokens, dct_tokens)
     else:
-        atm = atm_price()
-        kwargs['quantity']['atm'] = atm
-        dct_tokens = obj_sym.get_tokens(atm)
+        kwargs['quantity']['atm'] = PAPER_ATM
+        dct_tokens = obj_sym.get_tokens(PAPER_ATM)
         lst_tokens = list(dct_tokens.keys())
-        wserver = Wserver(brkr, lst_tokens, dct_tokens)
+        brkr = Paper(lst_tokens, dct_tokens)
+        wserver = brkr
+    return brkr, wserver
 
-else:
-    kwargs['quantity']['atm'] = PAPER_ATM
-    dct_tokens = obj_sym.get_tokens(PAPER_ATM)
-    lst_tokens = list(dct_tokens.keys())
-    brkr = Paper(lst_tokens, dct_tokens)
-    wserver = brkr
 
+# TODO
+brkr, wserver = get_brkr_and_wserver()
 while not any(kwargs['quotes']):
     print("waiting for quote \n")
     kwargs['quotes'] = wserver.ltp
-    sleep(1)
+    sleep(slp)
+
 # init trailing variables
 kwargs = reset_trailing(**kwargs)
 # init lot size
 kwargs = _calculate_allowable_quantity(**kwargs)
 # place the first entry
 kwargs = _positions(**kwargs)
-# if not any(kwargs['positions']):
-kwargs = _pyramid(**kwargs)
-#
+if not any(kwargs['positions']):
+    kwargs = _pyramid(**kwargs)
 kwargs["fn"] = is_pyramid_cond
 while kwargs.get("fn", "PACK_AND_GO") != "PACK_AND_GO":
+    sort_key = "value"
+    if any(kwargs['positions']) and (sort_key in kwargs['positions']):
+        kwargs['positions'].sort(key=lambda x: x[sort_key])
     kwargs = prettier(**kwargs)
     next_func = kwargs.pop("fn")
     kwargs = next_func(**kwargs)
