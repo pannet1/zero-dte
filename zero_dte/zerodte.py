@@ -107,16 +107,16 @@ def _positions(**kwargs):
     ]
     # filter by dict keys
     positions = [{key: dct[key] for key in keys} for dct in positions]
+    # remove positions that does not begin with symbol name
+    positions = [pos for pos in positions if pos["symbol"].startswith(
+        kwargs["quantity"]["quantity"])]
     # calc value
     for pos in positions:
         straddle = kwargs["quantity"].get('straddle', pos["last_price"])
         ltp = min(pos["last_price"], straddle)
         pos["value"] = int(pos["quantity"] * ltp)
     # remove negative values
-    positions = [pos for pos in positions if pos["quantity"] != 0]
-    # remove positions that does not begin with symbol name
-    positions = [pos for pos in positions if pos["symbol"].startswith(
-        kwargs["quantity"]["quantity"])]
+    # positions = [pos for pos in positions if pos["quantity"] != 0]
     kwargs["positions"] = pm.update(positions)
     return kwargs
 
@@ -551,7 +551,7 @@ def get_brkr_and_wserver():
             sys.exit(0)
         else:
             kwargs["quantity"] = hl_close(brkr, kwargs["quantity"])
-            atm = obj_sym.get_atm(kwargs["cl"])
+            atm = obj_sym.get_atm(kwargs["quantity"]["cl"])
             dct_tokens = obj_sym.get_tokens(atm)
             lst_tokens = list(dct_tokens.keys())
             wserver = Wserver(brkr, lst_tokens, dct_tokens)
