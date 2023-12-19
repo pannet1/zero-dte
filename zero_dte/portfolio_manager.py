@@ -25,7 +25,7 @@ class PortfolioManager:
                 yield pos
 
     def reduce_value(self, current_value: int, contains: Literal["C", "P"]):
-        self._sort("value")
+        self.portfolio = self._sort("value")
         lst = [{}]
         for entry in self.portfolio:
             if (
@@ -64,7 +64,7 @@ class PortfolioManager:
                     key=lambda x: x[sort_key], reverse=is_desc)
 
     def adjust_highest_ltp(self, requested_value: int, contains: Literal["C", "P"]):
-        self._sort("last_price", False)
+        self._sort("last_price", True)
         contains = self.base["EXPIRY"] + contains
         pos = {}
         val_for_this = 0
@@ -118,19 +118,33 @@ class PortfolioManager:
 
 if __name__ == "__main__":
     from constants import base
+    from time import sleep
+    from print import prettier
+
     # Example usage of the class with the updated adjust_positions method
-    portfolio_manager = PortfolioManager([], base)
+    pm = PortfolioManager([], base)
 
 # Sample data
     sample_data = [
-        {"symbol": "AAPL", "value": -2000},
-        {"symbol": "GOOGL", "value": 1500},
-        {"symbol": "MSFT", "value": 1800},
-        {"symbol": "AMZN", "value": 2500},
+        {"symbol": "AAPL", "ltp": 333.12, "value": -2000},
+        {"symbol": "GOOGL", "ltp": 0, "value": -500},
+        {"symbol": "MSFT", "ltp": 111.01, "value": 1800},
+        {"symbol": "AMZN", "ltp": 111.03, "value": -5000},
     ]
 
-# Call the update method with the sample data
-    sorted_portfolio = portfolio_manager.update(sample_data)
+    # Call the update method with the sample data
+    pm.update(sample_data)
 
-# Display the sorted portfolio
-    print(sorted_portfolio)
+    while True:
+
+        pm._sort("value")
+        # Display the sorted portfolio
+        print("False")
+        pf = {"pm": pm.portfolio}
+        prettier(**pf)
+        sleep(1)
+        print("True")
+        pf = {"pm": pm.portfolio}
+        pm._sort("ltp", True)
+        prettier(**pf)
+        sleep(1)
