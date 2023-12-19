@@ -22,7 +22,7 @@ PAPER_ATM = 47100
 SYMBOL = common["base"]
 kwargs = {
     "quotes": {},
-    "quantity": {"quantity": SYMBOL},
+    "quantity": {"quantity": SYMBOL, "is_new": 0},
     "perc": {"perc": "perc"},
     "adjust": {"adjust": 0},
     "trailing": {"trailing": 0},
@@ -53,18 +53,31 @@ def last_print(text, kwargs):
     return kwargs
 
 
-def atm_price(brkr):
+def hl_close(brkr, quantity):
+    hi = quantity.get("hi", 0)
+    lo = quantity.get("lo", 0)
     if isinstance(brkr, Finvasia):
         sleep(slp)
-        atm = 0
         resp = brkr.finvasia.get_quotes(
             dct_sym[SYMBOL]["exch"], dct_sym[SYMBOL]["token"])
-        if resp and resp.get("lp", False):
-            lp = int(float(resp["lp"]))
-            atm = obj_sym.get_atm(lp)
+        hi = int(float(resp["h"]))
+        lo = int(float(resp["l"]))
+        quantity["is_new"] = 1 if hi > quantity.get(
+            "hi", hi) else quantity["is_new"]
+        quantity["is_new"] = -1 \
+            if lo < quantity.get("lo", lo) else quantity["is_new"]
+        quantity['cl'] = int(float(resp["lp"]))
     else:
-        atm = PAPER_ATM
-    return atm
+        quantity["hi"] = PAPER_ATM + 50
+        quantity["lo"] = PAPER_ATM - 50
+        quantity["cl"] = PAPER_ATM
+        quantity["is_new"] = 1 if hi > quantity.get(
+            "hi", hi) else quantity["is_new"]
+        quantity["is_new"] = -1 \
+            if lo < quantity.get("lo", lo) else quantity["is_new"]
+        quantity["atm"] = PAPER_ATM
+    quantity["atm"] = obj_sym.get_atm(quantity["cl"])
+    return quantity
 
 
 def _order_place(**args):
@@ -270,12 +283,13 @@ def _update_metrics(**kwargs):
 def is_pyramid_cond(**kwargs):
     kwargs["fn"] = is_trailing_cond
     kwargs["quotes"].update(wserver.ltp)
+    quantity = kwargs["quantity"]
     try:
-        kwargs["quantity"]["atm"] = atm_price(brkr)
+        quantity = hl_close(brkr, quantity)
     except Exception as e:
         logging.debug(f"{e} unable to get atm price")
-    kwargs["quantity"]["straddle"] = obj_sym.calc_straddle_value(
-        kwargs["quantity"]["atm"], kwargs["quotes"])
+    quantity["straddle"] = obj_sym.calc_straddle_value(
+        quantity["atm"], kwargs["quotes"])
     kwargs = _positions(**kwargs)
     kwargs = _calculate_allowable_quantity(**kwargs)
     kwargs = _update_metrics(**kwargs)
@@ -536,13 +550,12 @@ def get_brkr_and_wserver():
             logging.error("Failed to authenticate")
             sys.exit(0)
         else:
-            atm = atm_price(brkr)
-            kwargs['quantity']['atm'] = atm
+            kwargs["quantity"] = hl_close(brkr, kwargs["quantity"])
+            atm = obj_sym.get_atm(kwargs["cl"])
             dct_tokens = obj_sym.get_tokens(atm)
             lst_tokens = list(dct_tokens.keys())
             wserver = Wserver(brkr, lst_tokens, dct_tokens)
     else:
-        kwargs['quantity']['atm'] = PAPER_ATM
         dct_tokens = obj_sym.get_tokens(PAPER_ATM)
         lst_tokens = list(dct_tokens.keys())
         brkr = Paper(lst_tokens, dct_tokens)
