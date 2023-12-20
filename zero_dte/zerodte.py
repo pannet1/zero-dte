@@ -81,18 +81,24 @@ def hl_close(brkr, quantity):
 
 
 def _order_place(**args):
-    if common["buff_perc"] == 0:
-        args["order_type"] = "MKT"
+    if args["quantity"] > 0:
+        if common["buff_perc"] == 0:
+            args["order_type"] = "MKT"
+        else:
+            args["order_type"] = "LMT"
+            dir = 1 if args["side"] == "B" else -1
+            last_price = kwargs["quotes"][args["symbol"]]
+            args["price"] = adjust_ltp(
+                last_price, dir * common["buff_perc"], 0.05)
+        args["exchange"] = base['EXCHANGE']
+        args["disclosed_quantity"] = args["quantity"]
+        brkr.order_place(**args)
+        file_to_append = data + "orders.json"
+        append_to_json(args, file_to_append)
     else:
-        args["order_type"] = "LMT"
-        dir = 1 if args["side"] == "B" else -1
-        last_price = kwargs["quotes"][args["symbol"]]
-        args["price"] = adjust_ltp(last_price, dir * common["buff_perc"], 0.05)
-    args["exchange"] = base['EXCHANGE']
-    args["disclosed_quantity"] = args["quantity"]
-    brkr.order_place(**args)
-    file_to_append = data + "orders.json"
-    append_to_json(args, file_to_append)
+        tag = args.get("tag", "unknown")
+        logging.error(
+            f"Q0 while: {tag}. lotsize {kwargs['lotsize']}")
 
 
 def _positions(**kwargs):
@@ -125,7 +131,7 @@ def _calculate_allowable_quantity(**kwargs):
     entry_quantity = base["ENTRY_PERC"] / 100 * base["MAX_QTY"]
     entry_lot = int(entry_quantity / base["LOT_SIZE"])
     simul_qty = (entry_lot * 2 * base["LOT_SIZE"]) + sold_quantities
-    if entry_lot > 0 and simul_qty <= base['MAX_QTY']:
+    if entry_lot > 0 and (simul_qty <= base['MAX_QTY']):
         kwargs['lotsize'] = entry_lot
     return kwargs
 
@@ -293,7 +299,7 @@ def is_pyramid_cond(**kwargs):
     kwargs = _update_metrics(**kwargs)
     if (
         kwargs["lotsize"] > 0
-        and kwargs["last"] != "pyramid plus" or kwargs["last"] != "pyramid minus"
+        # and (kwargs["last"] != "pyramid plus" or kwargs["last"] != "pyramid minus")
         and kwargs["portfolio"]["is_pyramid"]
     ):
         increase = kwargs["portfolio"]["PNL"] - kwargs["portfolio"]["lowest"]
