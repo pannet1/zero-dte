@@ -103,6 +103,7 @@ def _order_place(**args):
 
 def _positions(**kwargs):
     sleep(slp)
+    positions = [{}]
     positions = brkr.positions
     keys = [
         "symbol",
@@ -111,16 +112,17 @@ def _positions(**kwargs):
         "urmtom",
         "rpnl",
     ]
-    # filter by dict keys
-    positions = [{key: dct[key] for key in keys} for dct in positions]
-    # calc value
-    for pos in positions:
-        straddle = kwargs["quantity"].get('straddle', pos["last_price"])
-        ltp = min(pos["last_price"], straddle)
-        pos["value"] = int(pos["quantity"] * ltp)
-    # remove positions that does not begin with symbol name
-    positions = [pos for pos in positions if pos["symbol"].startswith(
-        kwargs["quantity"]["quantity"])]
+    if any(positions):
+        # filter by dict keys
+        positions = [{key: dct[key] for key in keys} for dct in positions]
+        # calc value
+        for pos in positions:
+            straddle = kwargs["quantity"].get('straddle', pos["last_price"])
+            ltp = min(pos["last_price"], straddle)
+            pos["value"] = int(pos["quantity"] * ltp)
+        # remove positions that does not begin with symbol name
+        positions = [pos for pos in positions if pos["symbol"].startswith(
+            kwargs["quantity"]["quantity"])]
     kwargs["positions"] = pm.update(positions)
     return kwargs
 
