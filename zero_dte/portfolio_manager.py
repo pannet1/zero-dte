@@ -5,16 +5,21 @@ from typing import Literal
 
 
 class PortfolioManager:
-    def __init__(self, lst_of_positions: list[dict], base: dict):
-        self.portfolio = lst_of_positions
+    def __init__(self, base: dict):
         self.base = base
+
+    def _sort(self, sort_key, is_desc=False):
+        if any(self.portfolio):
+            if sort_key in self.portfolio[0]:
+                self.portfolio.sort(
+                    key=lambda x: x[sort_key], reverse=is_desc)
 
     def update(self, list_of_positions: list[dict]):
         self.portfolio = list_of_positions
+        self._sort("value")
         return self.portfolio
 
     def close_positions(self):
-        self._sort("value")
         for entry in self.portfolio:
             if entry["quantity"] != 0:
                 pos = dict(
@@ -25,7 +30,6 @@ class PortfolioManager:
                 yield pos
 
     def reduce_value(self, current_value: int, contains: Literal["C", "P"]):
-        self.portfolio = self._sort("value")
         lst = [{}]
         for entry in self.portfolio:
             if (
@@ -57,12 +61,6 @@ class PortfolioManager:
                 lst.append(pos)
         return current_value, lst  # Return the resulting current_value in negative
 
-    def _sort(self, sort_key, is_desc=False):
-        if any(self.portfolio):
-            if sort_key in self.portfolio[0]:
-                self.portfolio.sort(
-                    key=lambda x: x[sort_key], reverse=is_desc)
-
     def adjust_highest_ltp(self, requested_value: int, contains: Literal["C", "P"]):
         self._sort("last_price", True)
         contains = self.base["EXPIRY"] + contains
@@ -90,10 +88,10 @@ class PortfolioManager:
                 logging.debug(
                     f"initially {requested_value=} and finally {val_for_this=}")
                 break
+        self._sort("value")
         return val_for_this, pos
 
     def close_profiting_position(self, contains: Literal["C", "P"]) -> int:
-        self._sort("value")
         quantity = 0
         for pos in self.portfolio:
             if (
@@ -122,7 +120,7 @@ if __name__ == "__main__":
     from print import prettier
 
     # Example usage of the class with the updated adjust_positions method
-    pm = PortfolioManager([], base)
+    pm = PortfolioManager(base)
 
 # Sample data
     sample_data = [
@@ -136,15 +134,13 @@ if __name__ == "__main__":
     pm.update(sample_data)
 
     while True:
-
-        pm._sort("value")
         # Display the sorted portfolio
         print("False")
         pf = {"pm": pm.portfolio}
         prettier(**pf)
         sleep(1)
         print("True")
-        pf = {"pm": pm.portfolio}
         pm._sort("ltp", True)
+        pf = {"pm": pm.portfolio}
         prettier(**pf)
         sleep(1)

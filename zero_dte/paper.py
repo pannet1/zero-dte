@@ -6,11 +6,11 @@ from print import prettier
 
 
 class Paper:
+    cols = ["entry_time", "side", "filled_quantity",
+            "symbol", "average_price", "remark"]
+
     def __init__(self, exchtkn: list, dct_tokens: dict):
-        self.orders = pd.DataFrame(
-            columns=["entry_time", "side", "filled_quantity",
-                     "symbol", "average_price", "remark"]
-        )
+        self.orders = pd.DataFrame()
         self.exchtkn = exchtkn
         self.dct_tokens = dct_tokens
 
@@ -19,7 +19,7 @@ class Paper:
         dct = {}
         for token in self.exchtkn:
             symbol = self.dct_tokens[token]
-            dct[symbol] = randint(1, 100)
+            dct[symbol] = randint(1, 200) * 0.05
         return dct
 
     def order_place(self, **position_dict):
@@ -29,9 +29,14 @@ class Paper:
             filled_quantity=int(position_dict["quantity"]),
             symbol=position_dict["symbol"],
             status="COMPLETED",
-            average_price=position_dict.get("prc", randint(1, 200)),
+            average_price=position_dict.get("prc", randint(1, 2000) * 0.05),
             remarks=position_dict["tag"],
         )
+        if not self.orders.empty:
+            self.orders = pd.concat(
+                [self.orders, pd.DataFrame([args])], ignore_index=True)
+        else:
+            self.orders = pd.DataFrame(columns=self.cols, data=[args])
         self.orders = pd.concat(
             [self.orders, pd.DataFrame([args])], ignore_index=True)
 

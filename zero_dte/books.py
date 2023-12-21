@@ -1,5 +1,5 @@
 from omspy_brokers.finvasia import Finvasia
-from constants import cnfg
+from constants import cnfg, common
 from print import prettier
 
 brkr = Finvasia(**cnfg)
@@ -32,8 +32,8 @@ def orders():
 
 
 def positions():
-    pos = [{}]
-    pos = brkr.positions
+    positions = [{}]
+    positions = brkr.positions
     keys = [
         "symbol",
         "quantity",
@@ -41,9 +41,18 @@ def positions():
         "urmtom",
         "rpnl",
     ]
-    if any(pos):
-        pos = [{k: d[k] for k in keys} for d in pos]
-    return pos[0]
+    if any(positions):
+        # filter by dict keys
+        positions = [{key: dct[key] for key in keys} for dct in positions]
+        # calc value
+        for pos in positions:
+            straddle = 100
+            ltp = min(pos["last_price"], straddle)
+            pos["value"] = int(pos["quantity"] * ltp)
+        # remove positions that does not begin with symbol name
+        positions = [
+            pos for pos in positions if pos["symbol"].startswith(common['base'])]
+    return positions
 
 
 kwargs = {}
