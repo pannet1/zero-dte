@@ -47,6 +47,10 @@ def _append_to_json(data, filename):
 
 
 def _log_and_show(text, kwargs):
+    """
+    logs and shows value on screen
+    returns kwargs
+    """
     logging.debug(text)
     kwargs["portfolio"]["last"] = text
     return kwargs
@@ -140,6 +144,9 @@ def _allowed_lot(**kwargs):
     simul_qty = (entry_lot * 2 * base["LOT_SIZE"]) + sold_quantities
     if entry_lot > 0 and (simul_qty <= base['MAX_QTY']):
         kwargs['portfolio']['lotsize'] = entry_lot
+    else:
+        kwargs = _log_and_show(
+            f"Q0: {entry_lot=} vs {simul_qty=} > {base['MAX_QTY']}", kwargs)
     return kwargs
 
 
@@ -551,6 +558,7 @@ brkr, wserver = get_brkr_and_wserver()
 while not any(kwargs['quotes']):
     print("waiting for quote \n")
     kwargs['quotes'] = wserver.ltp
+    print(kwargs['quotes'])
     sleep(slp)
 
 kwargs = _reset_trail(**kwargs)

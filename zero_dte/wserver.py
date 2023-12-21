@@ -1,9 +1,11 @@
 import logging
 import time
-import yaml
+
 
 # sample
 logging.basicConfig(level=logging.INFO)
+
+PAPER_ATM = 47500
 
 
 class Wserver:
@@ -46,7 +48,8 @@ class Wserver:
         # ap  Average trade price
         #
         logging.debug(
-            "quote event: {0}".format(time.strftime("%d-%m-%Y %H:%M:%S")) + str(message)
+            "quote event: {0}".format(time.strftime(
+                "%d-%m-%Y %H:%M:%S")) + str(message)
         )
         val = message.get("lp", False)
         if val:
@@ -56,16 +59,50 @@ class Wserver:
 
 if __name__ == "__main__":
     from omspy_brokers.finvasia import Finvasia
+    from constants import base, logging, common, cnfg, data, fils
+    from symbols import Symbols
+    from paper import Paper
+    from time import sleep
+    import sys
 
-    BROKER = Finvasia
-    dir_path = "../../"
-    with open(dir_path + "finvasia_amar.yaml", "r") as f:
-        config = yaml.safe_load(f)
-        print(config)
-        broker = BROKER(**config)
-        if broker.authenticate():
-            print("success")
+    slp = 2
+    SYMBOL = common["base"]
 
+    obj_sym = Symbols(base['EXCHANGE'], SYMBOL, base["EXPIRY"])
+    obj_sym.get_exchange_token_map_finvasia()
+
+    def get_brkr_and_wserver():
+        if common["live"]:
+            brkr = Finvasia(**cnfg)
+            if not brkr.authenticate():
+                logging.error("Failed to authenticate")
+                sys.exit(0)
+            else:
+                dct_tokens = obj_sym.get_tokens(PAPER_ATM)
+                lst_tokens = list(dct_tokens.keys())
+                wserver = Wserver(brkr, lst_tokens, dct_tokens)
+        else:
+            dct_tokens = obj_sym.get_tokens(PAPER_ATM)
+            lst_tokens = list(dct_tokens.keys())
+            brkr = Paper(lst_tokens, dct_tokens)
+            wserver = brkr
+        return brkr, wserver
+
+    """
+    brkr, wserver = get_brkr_and_wserver()
+    kwargs = {"quotes": {}}
+    while not any(kwargs['quotes']):
+        print("waiting for quote \n")
+        kwargs['quotes'] = wserver.ltp
+        print(kwargs['quotes'])
+        sleep(slp)
+
+    """
+    if common["live"]:
+        broker = Finvasia(**cnfg)
+        if not broker.authenticate():
+            logging.error("Failed to authenticate")
+            sys.exit(0)
     wserver = Wserver(
         broker,
         ["NSE|26000", "NFO|43156"],
