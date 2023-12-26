@@ -107,6 +107,7 @@ class Symbols:
         return dct["TradingSymbol"]
 
     def find_closest_premium(self, quotes, premium, contains):
+        print(self.expiry, contains)
         contains = self.expiry + contains
         closest_symbol = None
         closest_difference = float("inf")
@@ -124,8 +125,16 @@ class Symbols:
         pe = self.symbol + self.expiry + "P" + str(atm)
         return quotes[ce] + quotes[pe]
 
+    def find_option_type(self, tradingsymbol):
+        option_pattern = re.compile(rf"{self.symbol}{self.expiry}([CP])\d+")
+        match = option_pattern.match(tradingsymbol)
+        if match:
+            return match.group(1)  # Returns 'C' for call, 'P' for put
+        else:
+            return False
+
 
 if __name__ == "__main__":
-    symbols = Symbols("NFO", "NIFTY", "14DEC23")
+    symbols = Symbols("NFO", "BANKNIFTY", "28DEC23")
     symbols.get_exchange_token_map_finvasia()
-    print(symbols.get_tokens(20250))
+    print(symbols.find_option_type("BANKNIFTY28DEC23C47000"))

@@ -88,16 +88,6 @@ if __name__ == "__main__":
             wserver = brkr
         return brkr, wserver
 
-    """
-    brkr, wserver = get_brkr_and_wserver()
-    kwargs = {"quotes": {}}
-    while not any(kwargs['quotes']):
-        print("waiting for quote \n")
-        kwargs['quotes'] = wserver.ltp
-        print(kwargs['quotes'])
-        sleep(slp)
-
-    """
     if common["live"]:
         broker = Finvasia(**cnfg)
         if not broker.authenticate():

@@ -61,7 +61,7 @@ class PortfolioManager:
                 lst.append(pos)
         return current_value, lst  # Return the resulting current_value in negative
 
-    def adjust_highest_ltp(self, requested_value: int, contains: Literal["C", "P"]):
+    def adjust_highest_last_price(self, requested_value: int, contains: Literal["C", "P"]):
         self._sort("last_price", True)
         contains = self.base["EXPIRY"] + contains
         pos = {}
@@ -91,23 +91,27 @@ class PortfolioManager:
         self._sort("value")
         return val_for_this, pos
 
-    def close_profiting_position(self, contains: Literal["C", "P"]) -> int:
-        quantity = 0
-        for pos in self.portfolio:
+    def close_profiting_position(self) -> int:
+        for entry in self.portfolio:
             if (
                 re.search(
-                    re.escape(self.base["EXPIRY"] + contains), pos["symbol"])
-                and pos["last_price"] < self.base["COVER_FOR_PROFIT"]
+                    re.escape(self.base["EXPIRY"]), entry["symbol"])
+                and entry["last_price"] < self.base["COVER_FOR_PROFIT"]
             ):
-                quantity = pos["quantity"]
-                break
-        return quantity
+                pos = dict(
+                    symbol=entry["symbol"],
+                    side="B",
+                    quantity=abs(entry["quantity"]),
+                )
+                print(pos)
+                return pos
+        return {}
 
-    def is_above_highest_ltp(self, contains: Literal["C", "P"]) -> bool:
+    def is_above_highest_last_price(self, contains: Literal["C", "P"]) -> bool:
         if any(
             re.search(re.escape(self.base["EXPIRY"] + contains), pos["symbol"])
             and pos["quantity"] < 0
-            and pos["last_price"] > self.base["MAX_SOLD_LTP"]
+            and pos["last_price"] > self.base["MAX_SOLD_last_price"]
             for pos in self.portfolio
         ):
             return True
@@ -124,10 +128,14 @@ if __name__ == "__main__":
 
 # Sample data
     sample_data = [
-        {"symbol": "AAPL", "ltp": 333.12, "value": -2000},
-        {"symbol": "GOOGL", "ltp": 0, "value": -500},
-        {"symbol": "MSFT", "ltp": 111.01, "value": 1800},
-        {"symbol": "AMZN", "ltp": 111.03, "value": -5000},
+        {"symbol": "BANKNIFTY28DEC23C24500", "quantity": 50,
+            "last_price": 333.12, "value": -2000},
+        {"symbol": "BANKNIFTY28DEC23P25500", "quantity": -
+            500, "last_price": 1, "value": -500},
+        {"symbol": "BANKNIFTY28DEC23C26600", "quantity": 500,
+            "last_price": 111.01, "value": 1800},
+        {"symbol": "BANKNIFTY28DEC23P27000", "quantity": 500,
+            "last_price": 111.03, "value": -5000},
     ]
 
     # Call the update method with the sample data
@@ -139,8 +147,9 @@ if __name__ == "__main__":
         pf = {"pm": pm.portfolio}
         prettier(**pf)
         sleep(1)
+        pm.close_profiting_position()
         print("True")
-        pm._sort("ltp", True)
+        pm._sort("last_price", True)
         pf = {"pm": pm.portfolio}
         prettier(**pf)
         sleep(1)

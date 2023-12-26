@@ -56,7 +56,7 @@ class Paper:
         df = df.groupby("symbol").sum().reset_index()
         lst = df.to_dict(orient="records")
         for pos in lst:
-            pos["last_price"] = randint(1, 200)
+            pos["last_price"] = randint(47000, 47100)
             pos["urmtom"] = pos["quantity"]
             pos["urmtom"] = calc_m2m(pos)
             pos["rpnl"] = (pos["sold"] - pos["bought"]

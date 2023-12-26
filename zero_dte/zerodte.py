@@ -65,12 +65,15 @@ def _reset_trail(**kwargs):
 def _hl_cls(brkr, quantity):
     hi = quantity.get("hi", 0)
     lo = quantity.get("lo", 0)
+    keys = ["h", "l", "lp"]
     if isinstance(brkr, Finvasia):
         sleep(slp)
         resp = brkr.finvasia.get_quotes(
             dct_sym[SYMBOL]["exch"], dct_sym[SYMBOL]["token"])
-        hi = int(float(resp["h"]))
-        lo = int(float(resp["l"]))
+        # check if keys exists in the json resp
+        if resp and all(key in resp for key in keys):
+            hi = int(float(resp["h"]))
+            lo = int(float(resp["l"]))
         quantity["is_new"] = 1 if hi > quantity.get(
             "hi", hi) else quantity["is_new"]
         quantity["is_new"] = -1 \
@@ -423,13 +426,22 @@ def profit(**kwargs):
 
 def close_profit_position(**kwargs):
     kwargs["portfolio"]["fn"] = is_portfolio_stop
-    ce_qty = pm.close_profiting_position("C")
-    # TODO
-    if ce_qty < 0:
-        kwargs = _log_and_show("take C new positions", kwargs)
-    pe_qty = pm.close_profiting_position("P")
-    if pe_qty < 0:
-        kwargs = _log_and_show("take P new positions", kwargs)
+    pos = pm.close_profiting_position()
+    if any(pos):
+        _order_place(**pos)
+        option_type = obj_sym.find_option_type(pos["symbol"])
+        if option_type:
+            new_option_to_sell = obj_sym.find_closest_premium(
+                kwargs["quotes"],
+                option_type,
+                base["ADJUST_SEL_PREMIUM"]
+            )
+            pos.update({
+                "symbol": new_option_to_sell,
+                "side":  "S"
+            })
+        kwargs = _log_and_show("close_profit_position", kwargs)
+        kwargs = _update_metrics(**kwargs)
     return kwargs
 
 
@@ -485,6 +497,7 @@ def adjust(**kwargs):
                     ord.update({"tag": "adjust_detoriation"})
                     _order_place(**ord)
             # reduced_value_order(reduced_value, "adjust_detoriation")
+            """
         elif kwargs["portfolio"]["PNL"] < 0:
             kwargs = _log_and_show(f"{ce_or_pe} adjust_negative_pnl", kwargs)
             kwargs["adjust"]["adjust"] = 3
@@ -497,7 +510,7 @@ def adjust(**kwargs):
                 if any(ord):
                     ord.update({"tag": "adjust_negative_pnl"})
                     _order_place(**ord)
-            # reduced_value_order(reduced_value, "adjust_negative_pnl")
+            """
         elif kwargs["quantity"]["sell"] >= base["ADJUST_MAX_QTY"]:
             kwargs["adjust"]["adjust"] = 4
             kwargs = _log_and_show(
@@ -560,6 +573,8 @@ while not any(kwargs['quotes']):
     kwargs['quotes'] = wserver.ltp
     print(kwargs['quotes'])
     sleep(slp)
+
+print(wserver.ltp)
 
 kwargs = _reset_trail(**kwargs)
 kwargs = _allowed_lot(**kwargs)
