@@ -433,8 +433,8 @@ def close_profit_position(**kwargs):
         if option_type:
             new_option_to_sell = obj_sym.find_closest_premium(
                 kwargs["quotes"],
+                base["ADJUST_SEL_PREMIUM"],
                 option_type,
-                base["ADJUST_SEL_PREMIUM"]
             )
             pos.update({
                 "symbol": new_option_to_sell,
