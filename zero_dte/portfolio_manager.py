@@ -61,7 +61,7 @@ class PortfolioManager:
                 lst.append(pos)
         return current_value, lst  # Return the resulting current_value in negative
 
-    def adjust_highest_last_price(self, requested_value: int, contains: Literal["C", "P"]):
+    def adjust_highest_ltp(self, requested_value: int, contains: Literal["C", "P"]):
         self._sort("last_price", True)
         contains = self.base["EXPIRY"] + contains
         pos = {}
