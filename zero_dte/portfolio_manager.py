@@ -107,7 +107,7 @@ class PortfolioManager:
                 return pos
         return {}
 
-    def is_above_highest_last_price(self, contains: Literal["C", "P"]) -> bool:
+    def is_above_highest_ltp(self, contains: Literal["C", "P"]) -> bool:
         if any(
             re.search(re.escape(self.base["EXPIRY"] + contains), pos["symbol"])
             and pos["quantity"] < 0
