@@ -27,14 +27,10 @@ def _positions():
 
 def opposite_order(**args):
     print(args)
-    if args["quantity"] != 0:
-        args["order_type"] = "MKT"
-        args['side'] = "B" if args["quantity"] < 0 else "S"
-        quantity = abs(args.pop('quantity'))
-        args["quantity"] = quantity
-        args["exchange"] = base['EXCHANGE']
-        args["disclosed_quantity"] = quantity
-        # brkr.order_place(**args)
+    args["order_type"] = "MKT"
+    args["exchange"] = base['EXCHANGE']
+    args["disclosed_quantity"] = args["quantity"]
+    brkr.order_place(**args)
 
 
 def get_brkr_and_wserver():

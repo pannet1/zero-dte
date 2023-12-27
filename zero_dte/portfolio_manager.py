@@ -94,6 +94,7 @@ class PortfolioManager:
     def close_profiting_position(self) -> int:
         for entry in self.portfolio:
             if (
+                entry["quantity"] < 0 and
                 re.search(
                     re.escape(self.base["EXPIRY"]), entry["symbol"])
                 and entry["last_price"] < self.base["COVER_FOR_PROFIT"]
@@ -102,6 +103,7 @@ class PortfolioManager:
                     symbol=entry["symbol"],
                     side="B",
                     quantity=abs(entry["quantity"]),
+                    tag="close_profit_position"
                 )
                 print(pos)
                 return pos
