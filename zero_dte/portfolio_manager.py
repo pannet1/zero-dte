@@ -111,7 +111,7 @@ class PortfolioManager:
         if any(
             re.search(re.escape(self.base["EXPIRY"] + contains), pos["symbol"])
             and pos["quantity"] < 0
-            and pos["last_price"] > self.base["MAX_SOLD_last_price"]
+            and pos["last_price"] > self.base["MAX_SOLD_LTP"]
             for pos in self.portfolio
         ):
             return True
