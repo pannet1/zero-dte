@@ -13,7 +13,7 @@ class TestPortfolioManager(unittest.TestCase):
             "COVER_FOR_PROFIT": 200,
             "MAX_SOLD_LTP": 150,
         }
-        self.manager = PortfolioManager([], self.base_data)
+        self.manager = PortfolioManager(self.base_data)
 
     def test_update(self):
         positions = [

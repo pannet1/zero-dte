@@ -29,37 +29,32 @@ class PortfolioManager:
                 )
                 yield pos
 
-    def reduce_value(self, current_value: int, contains: Literal["C", "P"]):
+    def reduce_value(self, target_value: int, contains: Literal["C", "P"]):
+        before_reducing = target_value
         lst = [{}]
         for entry in self.portfolio:
             if (
-                entry["quantity"] < 0
-                and current_value > 0
+                entry["quantity"] < 0 and target_value > 0
                 and re.search(
                     re.escape(self.base["EXPIRY"] + contains), entry["symbol"]
                 )
             ):
-                logging.debug(f"{current_value} before reducing")
+                logging.debug(f"{target_value=} before reducing")
                 pos = {}
                 entry_lot = abs(entry["quantity"]) / self.base["LOT_SIZE"]
-                val_per_lot = abs(entry["value"]) / entry_lot
+                val_per_entry_lot = abs(entry["value"]) / entry_lot
                 target_lot = math.ceil(
-                    current_value / entry["last_price"] / self.base["LOT_SIZE"]
+                    target_value / entry["last_price"] / self.base["LOT_SIZE"]
                 )
-                logging.debug(
-                    f"{entry_lot=} vs {target_lot=} for {val_per_lot=}")
-                target_lot = 1 if target_lot == 0 else target_lot
-                calculated = entry_lot if target_lot > entry_lot else target_lot
-                val_for_this = calculated * val_per_lot
-                current_value -= val_for_this
-                logging.debug(
-                    f"{current_value=} after reducing {val_for_this}")
+                target_min_one_lot = 1 if target_lot == 0 else target_lot
+                target_final_lot = entry_lot if target_min_one_lot > entry_lot else target_min_one_lot
+                val_for_this = target_final_lot * val_per_entry_lot
+                target_value -= val_for_this
                 pos["symbol"] = entry["symbol"]
-                pos["quantity"] = calculated * self.base["LOT_SIZE"]
+                pos["quantity"] = target_final_lot * self.base["LOT_SIZE"]
                 pos["side"] = "B"
-                logging.debug(f"value reduce order details {pos}")
                 lst.append(pos)
-        return current_value, lst  # Return the resulting current_value in negative
+        return target_value, lst  # Return the resulting target_value in negative
 
     def adjust_highest_ltp(self, requested_value: int, contains: Literal["C", "P"]):
         self._sort("last_price", True)
@@ -71,20 +66,20 @@ class PortfolioManager:
                 re.escape(contains), entry["symbol"]
             ):
                 entry_lot = abs(entry["quantity"]) / self.base["LOT_SIZE"]
-                val_per_lot = abs(entry["value"]) / entry_lot
+                val_per_entry_lot = abs(entry["value"]) / entry_lot
                 target_lot = math.ceil(
                     requested_value /
                     entry["last_price"] / self.base["LOT_SIZE"]
                 )
                 logging.debug(
-                    f"{entry_lot=} vs {target_lot=} for {val_per_lot=}")
+                    f"{entry_lot=} vs {target_lot=} for {val_per_entry_lot=}")
                 calculated = entry_lot if target_lot > entry_lot else target_lot
                 calculated = 1 if calculated == 0 else calculated
                 # adjust_qty
                 pos["symbol"] = entry["symbol"]
                 pos["quantity"] = calculated * self.base["LOT_SIZE"]
                 pos["side"] = "B"
-                val_for_this = calculated * val_per_lot
+                val_for_this = calculated * val_per_entry_lot
                 logging.debug(
                     f"initially {requested_value=} and finally {val_for_this=}")
                 break

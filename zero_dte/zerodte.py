@@ -459,6 +459,21 @@ def is_portfolio_stop(**kwargs):
 
 
 def adjust(**kwargs):
+    def reduced_value_order(target_value, ce_or_pe, tag):
+        sell_symbol = obj_sym.find_closest_premium(kwargs['quotes'],
+                                                   base['ADJUST_SEL_PREMIUM'],
+                                                   ce_or_pe
+                                                   )
+        quantity = int(target_value / base['LOT_SIZE']) * base['LOT_SIZE']
+        if quantity > 0:
+            args = dict(
+                symbol=sell_symbol,
+                quantity=quantity,
+                side="S",
+                tag=tag
+            )
+            _order_place(**args)
+
     kwargs["portfolio"]["fn"] = is_pyramid_cond
     ce_or_pe = None
 
@@ -483,20 +498,20 @@ def adjust(**kwargs):
                 "tag": "adjust_highest_ltp",
             }
             _order_place(**args)
-            # reduced_value_order(reduced_value, "adjust_highest_ltp")
         # level 2
         elif kwargs["perc"]["decline"] > 0.25:
             kwargs = _log_and_show(f"{ce_or_pe} adjust_detoriation", kwargs)
             kwargs["adjust"]["adjust"] = 2
             reduced_value, lst_of_ords = pm.reduce_value(
                 kwargs["adjust"]["amount"], contains=ce_or_pe)
-            reduced_value = kwargs["adjust"]["amount"] - \
-                reduced_value  # expected neg reduced_value
             for ord in lst_of_ords:
                 if any(ord):
                     ord.update({"tag": "adjust_detoriation"})
                     _order_place(**ord)
-            # reduced_value_order(reduced_value, "adjust_detoriation")
+            if reduced_value < 0:
+                reduced_value_order(abs(reduced_value),
+                                    ce_or_pe,
+                                    "adjust_detoriation")
             """
         elif kwargs["portfolio"]["PNL"] < 0:
             kwargs = _log_and_show(f"{ce_or_pe} adjust_negative_pnl", kwargs)
@@ -522,7 +537,6 @@ def adjust(**kwargs):
                 if any(ord):
                     ord.update({"tag": "adjust_max_qty"})
                     _order_place(**ord)
-            # reduced_value_order(reduced_value, "adjust_max_qty")
         else:
             ce_or_pe = "P" if ce_or_pe == "C" else "C"
             kwargs["adjust"]["adjust"] = 5
