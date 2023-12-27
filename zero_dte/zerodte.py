@@ -524,7 +524,7 @@ def adjust(**kwargs):
                     _order_place(**ord)
             # reduced_value_order(reduced_value, "adjust_max_qty")
         else:
-            ce_or_pe = "P" if ce_or_pe == "C" else "P"
+            ce_or_pe = "P" if ce_or_pe == "C" else "C"
             kwargs["adjust"]["adjust"] = 5
             symbol = obj_sym.find_closest_premium(
                 kwargs['quotes'], base['ADJUST_SEL_PREMIUM'], ce_or_pe)
