@@ -512,7 +512,6 @@ def adjust(**kwargs):
                 reduced_value_order(abs(reduced_value),
                                     ce_or_pe,
                                     "adjust_detoriation")
-            """
         elif kwargs["portfolio"]["PNL"] < 0:
             kwargs = _log_and_show(f"{ce_or_pe} adjust_negative_pnl", kwargs)
             kwargs["adjust"]["adjust"] = 3
@@ -525,7 +524,10 @@ def adjust(**kwargs):
                 if any(ord):
                     ord.update({"tag": "adjust_negative_pnl"})
                     _order_place(**ord)
-            """
+            if reduced_value < 0:
+                reduced_value_order(abs(reduced_value),
+                                    ce_or_pe,
+                                    "adjust_negative_pnl")
         elif kwargs["quantity"]["sell"] >= base["ADJUST_MAX_QTY"]:
             kwargs["adjust"]["adjust"] = 4
             kwargs = _log_and_show(
