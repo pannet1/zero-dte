@@ -11,7 +11,7 @@ files.sort()
 for file in files:
     obj = fils.json_fm_file(data + str(file))
     prettier(**obj)
-    sleep(5)
+    sleep(0.5)
 
 # sort a list in ascending order
 #

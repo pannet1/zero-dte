@@ -515,8 +515,8 @@ def adjust(**kwargs):
                 reduced_value_order(abs(reduced_value),
                                     ce_or_pe,
                                     "adjust_detoriation")
-        elif kwargs["portfolio"]["PNL"] < 0:
-            kwargs = _log_and_show(f"{ce_or_pe} adjust_negative_pnl", kwargs)
+        elif kwargs["perc"]["curr_pfolio"] < -0.05:
+            kwargs = _log_and_show(f"{ce_or_pe} adjust_neg_pfolio", kwargs)
             kwargs["adjust"]["adjust"] = 3
             reduced_value, lst_of_ords = pm.reduce_value(
                 kwargs["adjust"]["amount"], contains=ce_or_pe
@@ -525,12 +525,12 @@ def adjust(**kwargs):
                 reduced_value  # expected neg reduced_value
             for ord in lst_of_ords:
                 if any(ord):
-                    ord.update({"tag": "adjust_negative_pnl"})
+                    ord.update({"tag": "adjust_neg_pfolio"})
                     _order_place(**ord)
             if reduced_value < 0:
                 reduced_value_order(abs(reduced_value),
                                     ce_or_pe,
-                                    "adjust_negative_pnl")
+                                    "adjust_neg_pfolio")
         elif kwargs["quantity"]["sell"] >= base["ADJUST_MAX_QTY"]:
             kwargs["adjust"]["adjust"] = 4
             kwargs = _log_and_show(
@@ -551,17 +551,18 @@ def adjust(**kwargs):
             calculated = math.ceil(
                 kwargs["adjust"]["amount"] / ltp / base['LOT_SIZE'])
             sell_qty = 1 if calculated == 0 else calculated
-            kwargs = _log_and_show(
-                f"{kwargs['adjust']['amount']} val to reduce by {sell_qty}",
-                kwargs)
+            quantity = sell_qty * base['LOT_SIZE']
             args = {}
             args.update({
                 "symbol": symbol,
-                "quantity": sell_qty * base['LOT_SIZE'],
+                "quantity": quantity,
                 "side": "S",
                 "tag": "adjust_fresh_sell"
             })
             _order_place(**args)
+            kwargs = _log_and_show(
+                f"adjust {kwargs['adjust']['amount']} in fresh_sell on {symbol}",
+                kwargs)
     return kwargs
 
 
