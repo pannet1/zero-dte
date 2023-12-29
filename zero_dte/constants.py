@@ -4,8 +4,8 @@ from toolkit.logger import Logger
 
 fname = "finvasia_amar"
 filepath = "../../"
-logging = Logger(30, f"{filepath}{fname}.log")
-
+# logging = Logger(10, f"{filepath}{fname}.log")
+logging = Logger(10)
 fils = Fileutils()
 utls = Utilities()
 

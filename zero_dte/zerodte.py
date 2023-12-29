@@ -22,17 +22,27 @@ PAPER_ATM = 47100
 SYMBOL = common["base"]
 kwargs = {
     "quotes": {},
-    "quantity": {"quantity": SYMBOL, "is_new": 0},
+    "trailing": {"trailing": 0},
     "perc": {"perc": "perc"},
     "adjust": {"adjust": 0, "max_qty": base['ADJUST_MAX_QTY']},
-    "trailing": {"trailing": 0},
     "positions": [],
+    "quantity": {"quantity": SYMBOL, "is_new": 0},
     "portfolio": {"is_pyramid": True,  "last": "Happy Trading"}
 }
 
 pm = PortfolioManager(base)
 obj_sym = Symbols(base['EXCHANGE'], SYMBOL, base["EXPIRY"])
 obj_sym.get_exchange_token_map_finvasia()
+
+
+def _log_and_show(text, kwargs):
+    """
+    logs and shows value on screen
+    returns kwargs
+    """
+    logging.info(text)
+    kwargs["portfolio"]["last"] = text
+    return kwargs
 
 
 def _append_to_json(data, filename):
@@ -44,16 +54,6 @@ def _append_to_json(data, filename):
         # Write the updated data back to the file
         with open(filename, 'a+') as file:
             json.dump(data, file, ensure_ascii=False, indent=4, default=str)
-
-
-def _log_and_show(text, kwargs):
-    """
-    logs and shows value on screen
-    returns kwargs
-    """
-    logging.debug(text)
-    kwargs["portfolio"]["last"] = text
-    return kwargs
 
 
 def _reset_trail(**kwargs):
@@ -110,7 +110,7 @@ def _order_place(**args):
     else:
         tag = args.get("tag", "unknown")
         logging.error(
-            f"Q0 while: {tag}. {kwargs['portfolio']['lotsize']}")
+            f"Q0 while: {tag} {kwargs['portfolio']['lotsize']}")
 
 
 def _positions(**kwargs):
@@ -147,9 +147,11 @@ def _allowed_lot(**kwargs):
     simul_qty = (entry_lot * 2 * base["LOT_SIZE"]) + sold_quantities
     if entry_lot > 0 and (simul_qty <= base['MAX_QTY']):
         kwargs['portfolio']['lotsize'] = entry_lot
+    """
     else:
         kwargs = _log_and_show(
             f"Q0: {entry_lot=} vs {simul_qty=} > {base['MAX_QTY']}", kwargs)
+    """
     return kwargs
 
 
@@ -397,7 +399,7 @@ def is_trailing_cond(**kwargs):
         return kwargs
 
     # set values
-    kwargs["portfolio"]["fn"] = profit
+    kwargs["portfolio"]["fn"] = toggle_pyramid
     if 0 < kwargs["trailing"]["trailing"] <= 4:
         kwargs = _exit_by_trail(**kwargs)
     elif kwargs["trailing"]["trailing"] == 5:
@@ -413,14 +415,15 @@ def is_trailing_cond(**kwargs):
     return kwargs
 
 
-def profit(**kwargs):
+def toggle_pyramid(**kwargs):
     kwargs["portfolio"]["fn"] = close_profit_position
-    if kwargs["perc"]["decline"] > 2.5:
-        kwargs["portfolio"]["is_pyramid"] = False
-        kwargs = _log_and_show("portfolio decline: pyrmid disabled", kwargs)
-    elif kwargs["perc"]["improve"] > 2.5:
-        kwargs["portfolio"]["is_pyramid"] = True
-        kwargs = _log_and_show("portfolio improve: pyrmid enabled", kwargs)
+    is_pyramid = kwargs["portfolio"]["is_pyramid"]
+    if kwargs["perc"]["decline"] > 2.5 and is_pyramid:
+        is_pyramid = False
+        kwargs = _log_and_show("pyramid disabled", kwargs)
+    elif kwargs["perc"]["improve"] > 2.5 and not is_pyramid:
+        is_pyramid = True
+        kwargs = _log_and_show("pyramid enabled", kwargs)
     return kwargs
 
 
@@ -583,6 +586,19 @@ def get_brkr_and_wserver():
 
 
 # TODO
+files = fils.get_files_with_extn("json", data)
+files = [file.split(".")[0] for file in files]
+files = [file for file in files
+         if file.isdigit()]
+for file in files:
+    pathfile = data + str(file) + ".json"
+    if fils.is_file_not_2day(pathfile):
+        obj = fils.del_file(pathfile)
+pathfile = data + "orders.json"
+if fils.is_file_not_2day(pathfile):
+    fils.nuke_file(pathfile)
+
+
 brkr, wserver = get_brkr_and_wserver()
 while not any(kwargs['quotes']):
     print("waiting for quote \n")

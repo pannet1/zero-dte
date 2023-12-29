@@ -31,6 +31,7 @@ class PortfolioManager:
 
     def reduce_value(self, target_value: int, contains: Literal["C", "P"]):
         before_reducing = target_value
+        pm._sort("last_price", is_desc=True)
         lst = [{}]
         for entry in self.portfolio:
             if (
@@ -39,7 +40,6 @@ class PortfolioManager:
                     re.escape(self.base["EXPIRY"] + contains), entry["symbol"]
                 )
             ):
-                logging.debug(f"{target_value=} before reducing")
                 pos = {}
                 entry_lot = abs(entry["quantity"]) / self.base["LOT_SIZE"]
                 val_per_entry_lot = abs(entry["value"]) / entry_lot
@@ -54,6 +54,7 @@ class PortfolioManager:
                 pos["quantity"] = target_final_lot * self.base["LOT_SIZE"]
                 pos["side"] = "B"
                 lst.append(pos)
+        logging.debug(f"{before_reducing=} vs {target_value=}")
         return target_value, lst  # Return the resulting target_value in negative
 
     def adjust_highest_ltp(self, requested_value: int, contains: Literal["C", "P"]):
@@ -128,7 +129,7 @@ if __name__ == "__main__":
         {"symbol": "BANKNIFTY28DEC23C24500", "quantity": 50,
             "last_price": 333.12, "value": -2000},
         {"symbol": "BANKNIFTY28DEC23P25500", "quantity": -
-            500, "last_price": 1, "value": -500},
+            500, "last_price": 300, "value": -500},
         {"symbol": "BANKNIFTY28DEC23C26600", "quantity": 500,
             "last_price": 111.01, "value": 1800},
         {"symbol": "BANKNIFTY28DEC23P27000", "quantity": 500,
@@ -138,15 +139,12 @@ if __name__ == "__main__":
     # Call the update method with the sample data
     pm.update(sample_data)
 
-    while True:
-        # Display the sorted portfolio
-        print("False")
-        pf = {"pm": pm.portfolio}
-        prettier(**pf)
-        sleep(1)
-        pm.close_profiting_position()
-        print("True")
-        pm._sort("last_price", True)
-        pf = {"pm": pm.portfolio}
-        prettier(**pf)
-        sleep(1)
+    # Display the sorted portfolio
+    pf = {
+        "last": "before adjusting",
+        "pm": pm.portfolio,
+    }
+    prettier(**pf)
+    val, pos = pm.reduce_value(498, 'P')
+    sleep(2)
+    print(val, pos)

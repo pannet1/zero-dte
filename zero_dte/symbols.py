@@ -1,6 +1,7 @@
 import pandas as pd
 import re
 from toolkit.fileutils import Fileutils
+from typing import Dict, Optional
 
 dct_sym = {
     "NIFTY": {
@@ -106,17 +107,23 @@ class Symbols:
         dct = tokens_found.to_dict()
         return dct["TradingSymbol"]
 
-    def find_closest_premium(self, quotes, premium, contains):
+    def find_closest_premium(self,
+                             quotes: Dict[str, float],
+                             premium: float,
+                             contains: str) -> Optional[str]:
         contains = self.expiry + contains
-        closest_symbol = None
-        closest_difference = float("inf")
+        # Create a dictionary to store symbol to absolute difference mapping
+        symbol_differences: Dict[str, float] = {}
 
         for symbol, ltp in quotes.items():
             if re.search(re.escape(contains), symbol):
                 difference = abs(ltp - premium)
-                if difference < closest_difference:
-                    closest_difference = difference
-                    closest_symbol = symbol
+                symbol_differences[symbol] = difference
+
+        # Find the symbol with the lowest difference
+        closest_symbol = min(symbol_differences,
+                             key=symbol_differences.get, default=None)
+
         return closest_symbol
 
     def calc_straddle_value(self, atm: int, quotes: list):
