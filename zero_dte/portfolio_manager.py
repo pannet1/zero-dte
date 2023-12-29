@@ -31,7 +31,7 @@ class PortfolioManager:
 
     def reduce_value(self, target_value: int, contains: Literal["C", "P"]):
         before_reducing = target_value
-        pm._sort("last_price", is_desc=True)
+        self._sort("last_price", is_desc=True)
         lst = [{}]
         for entry in self.portfolio:
             if (
