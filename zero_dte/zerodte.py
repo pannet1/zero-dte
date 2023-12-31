@@ -6,7 +6,7 @@ from paper import Paper
 from symbols import Symbols, dct_sym
 from print import prettier
 from toolkit.digits import Digits
-from toolkit.round_to_paise import adjust_ltp
+from toolkit.round_to_paise import adjust_ltp, round_val_to_qty
 import pendulum as pdlm
 from time import sleep
 from rich import print
@@ -236,6 +236,7 @@ def _update_metrics(**kwargs):
     buy = sum(pos["quantity"]
               for pos in kwargs["positions"] if pos["quantity"] > 0)
     kwargs["quantity"].update({"sell": sell, "buy": buy, "total": buy - sell})
+
     # percentages
     max_pfolio = Digits.calc_perc(highest, base["PFOLIO"])
     curr_pfolio = Digits.calc_perc(pnl, base["PFOLIO"])
@@ -429,21 +430,23 @@ def toggle_pyramid(**kwargs):
 
 def close_profit_position(**kwargs):
     kwargs["portfolio"]["fn"] = is_portfolio_stop
-    pos = pm.close_profiting_position()
+    tag = "close_profit_position"
+    value_to_reduce = base["ADJUST_SEL_PREMIUM"] * 2 * base['LOT_SIZE']
+    reduced_value, pos = pm.close_profiting_position(
+        value_to_reduce, tag)
     if any(pos):
         _order_place(**pos)
-        option_type = obj_sym.find_option_type(pos["symbol"])
-        if option_type:
-            new_option_to_sell = obj_sym.find_closest_premium(
-                kwargs["quotes"],
-                base["ADJUST_SEL_PREMIUM"],
-                option_type,
-            )
-            pos.update({
-                "symbol": new_option_to_sell,
-                "side":  "S"
-            })
-        kwargs = _log_and_show("close_profit_position", kwargs)
+        kwargs = _log_and_show(tag, kwargs)
+        # find option to cover
+        ce_or_pe = obj_sym.find_option_type(pos["symbol"])
+        if ce_or_pe and value_to_reduce > 0:
+            reduced_value_order(reduced_value,
+                                ce_or_pe,
+                                tag)
+            kwargs = _log_and_show(
+                f"adjust {ce_or_pe} {reduced_value} in new profit_position",
+                kwargs)
+            kwargs = _log_and_show(tag, kwargs)
         kwargs = _update_metrics(**kwargs)
     return kwargs
 
@@ -461,22 +464,24 @@ def is_portfolio_stop(**kwargs):
     return kwargs
 
 
-def adjust(**kwargs):
-    def reduced_value_order(target_value, ce_or_pe, tag):
-        sell_symbol = obj_sym.find_closest_premium(kwargs['quotes'],
-                                                   base['ADJUST_SEL_PREMIUM'],
-                                                   ce_or_pe
-                                                   )
-        quantity = int(target_value / base['LOT_SIZE']) * base['LOT_SIZE']
-        if quantity > 0:
-            args = dict(
-                symbol=sell_symbol,
-                quantity=quantity,
-                side="S",
-                tag=tag
-            )
-            _order_place(**args)
+def reduced_value_order(value, ce_or_pe, tag):
+    symbol = obj_sym.find_closest_premium(kwargs['quotes'],
+                                          base["ADJUST_SEL_PREMIUM"],
+                                          ce_or_pe)
+    args = dict(
+        symbol=symbol,
+        quantity=round_val_to_qty(
+            abs(value),
+            kwargs["quotes"][symbol],
+            base['LOT_SIZE']
+        ),
+        side="S",
+        tag=tag
+    )
+    _order_place(**args)
 
+
+def adjust(**kwargs):
     kwargs["portfolio"]["fn"] = is_pyramid_cond
     ce_or_pe = None
 
@@ -487,81 +492,65 @@ def adjust(**kwargs):
 
     if ce_or_pe:
         # level 1
+        amount = kwargs["adjust"]["amount"]
         if pm.is_above_highest_ltp(contains=ce_or_pe):
-            kwargs = _log_and_show(f"{ce_or_pe} adjust_highest", kwargs)
             kwargs["adjust"]["adjust"] = 1
-            reduced_value, buy_entry = pm.adjust_highest_ltp(
-                kwargs["adjust"]["amount"], ce_or_pe)
-            reduced_value = kwargs["adjust"]["amount"] - \
-                reduced_value  # expected neg reduced_value
-            args = {
-                "symbol": buy_entry["symbol"],
-                "quantity": buy_entry["quantity"],
-                "side": "B",
-                "tag": "adjust_highest_ltp",
-            }
-            _order_place(**args)
+            tag = "adjust_highest_ltp"
+            reduced_value, ord = pm.adjust_highest_ltp(
+                amount, ce_or_pe, tag)
+            if any(ord):
+                _order_place(**ord)
+                log = f"adjust {ord['quantity']} {ord['symbol']}" \
+                    " {tag}"
+                kwargs = _log_and_show(log, kwargs)
         # level 2
         elif kwargs["perc"]["decline"] > 0.25:
-            kwargs = _log_and_show(f"{ce_or_pe} adjust_detoriation", kwargs)
             kwargs["adjust"]["adjust"] = 2
+            tag = "adjust_detoriation"
             reduced_value, lst_of_ords = pm.reduce_value(
-                kwargs["adjust"]["amount"], contains=ce_or_pe)
+                amount, ce_or_pe, tag)
             for ord in lst_of_ords:
-                if any(ord):
-                    ord.update({"tag": "adjust_detoriation"})
-                    _order_place(**ord)
+                _order_place(**ord)
             if reduced_value < 0:
-                reduced_value_order(abs(reduced_value),
+                reduced_value_order(reduced_value,
                                     ce_or_pe,
-                                    "adjust_detoriation")
+                                    tag)
+            kwargs = _log_and_show(f"{ce_or_pe} {tag}", kwargs)
+        # level 3
         elif kwargs["perc"]["curr_pfolio"] < -0.05:
-            kwargs = _log_and_show(f"{ce_or_pe} adjust_neg_pfolio", kwargs)
             kwargs["adjust"]["adjust"] = 3
+            tag = "adjust_neg_pnl"
             reduced_value, lst_of_ords = pm.reduce_value(
-                kwargs["adjust"]["amount"], contains=ce_or_pe
+                amount, ce_or_pe, tag
             )
-            reduced_value = kwargs["adjust"]["amount"] - \
-                reduced_value  # expected neg reduced_value
             for ord in lst_of_ords:
-                if any(ord):
-                    ord.update({"tag": "adjust_neg_pfolio"})
-                    _order_place(**ord)
+                _order_place(**ord)
             if reduced_value < 0:
-                reduced_value_order(abs(reduced_value),
+                reduced_value_order(reduced_value,
                                     ce_or_pe,
-                                    "adjust_neg_pfolio")
+                                    tag)
+            kwargs = _log_and_show(f"{ce_or_pe} {tag}", kwargs)
+        # level 4
         elif kwargs["quantity"]["sell"] >= base["ADJUST_MAX_QTY"]:
             kwargs["adjust"]["adjust"] = 4
-            kwargs = _log_and_show(
-                f"{ce_or_pe} {kwargs['quantity']['sell']} >= adjust_max_qty {base['ADJUST_MAX_QTY']}", kwargs)
-            reduced_value, lst_of_ords = pm.reduce_value(
-                kwargs["adjust"]["amount"], contains=ce_or_pe
+            tag = "adjust_max_qty"
+            _, lst_of_ords = pm.reduce_value(
+                amount, ce_or_pe, tag
             )
             for ord in lst_of_ords:
-                if any(ord):
-                    ord.update({"tag": "adjust_max_qty"})
-                    _order_place(**ord)
+                _order_place(**ord)
+            kwargs = _log_and_show(
+                f"{ce_or_pe} {kwargs['quantity']['sell']} >= adjust_max_qty {base['ADJUST_MAX_QTY']}", kwargs)
+        # level 5
         else:
             ce_or_pe = "P" if ce_or_pe == "C" else "C"
             kwargs["adjust"]["adjust"] = 5
-            symbol = obj_sym.find_closest_premium(
-                kwargs['quotes'], base['ADJUST_SEL_PREMIUM'], ce_or_pe)
-            ltp = kwargs['quotes'][symbol]
-            calculated = math.ceil(
-                kwargs["adjust"]["amount"] / ltp / base['LOT_SIZE'])
-            sell_qty = 1 if calculated == 0 else calculated
-            quantity = sell_qty * base['LOT_SIZE']
-            args = {}
-            args.update({
-                "symbol": symbol,
-                "quantity": quantity,
-                "side": "S",
-                "tag": "adjust_fresh_sell"
-            })
-            _order_place(**args)
+            tag = "adjust_fresh_sell"
+            reduced_value_order(amount,
+                                ce_or_pe,
+                                tag)
             kwargs = _log_and_show(
-                f"adjust {kwargs['adjust']['amount']} in fresh_sell on {symbol}",
+                f"{tag} {ce_or_pe} for {amount}",
                 kwargs)
     return kwargs
 

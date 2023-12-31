@@ -1,7 +1,46 @@
 import math
 import re
+
 from constants import logging
-from typing import Literal
+from typing import Literal, Dict
+
+
+def target_lot_fm_value(
+    target_val: int,
+    entry_last_price: float,
+    base_lot: int = 15
+):
+    # find target quantity
+    target_qty = target_val / entry_last_price       # round qty to the nearest lot
+    target_lot = round(target_qty / base_lot)
+    return target_lot
+
+
+def get_val_and_pos(
+    entry, target_value, base_lot_size, tag
+):
+    # find the lot size of the position
+    entry_lot = abs(entry["quantity"]) / base_lot_size
+    # find the value of each position lot
+    val_per_entry_lot = abs(entry["value"]) / entry_lot
+    # find the target lot to be covered for the target value
+    target_lot = target_lot_fm_value(
+        target_value, entry["last_price"], base_lot_size
+    )
+    # if the target lot is 0 make it 1
+    target_min_one_lot = 1 if target_lot == 0 else target_lot
+    # ensure that the target is not more than the actual position we have
+    target_final_lot = entry_lot if target_min_one_lot > entry_lot else target_min_one_lot
+    # how much value we will reduce if we square
+    val_for_this = target_final_lot * val_per_entry_lot
+    # reduced that much value from the initial target
+    # add the covering trade details to the empty pos dictionary
+    pos = {}
+    pos["symbol"] = entry["symbol"]
+    pos["quantity"] = target_final_lot * base_lot_size
+    pos["side"] = "B"
+    pos["tag"] = tag
+    return val_for_this, pos
 
 
 class PortfolioManager:
@@ -29,65 +68,48 @@ class PortfolioManager:
                 )
                 yield pos
 
-    def reduce_value(self, target_value: int, contains: Literal["C", "P"]):
-        before_reducing = target_value
+    def reduce_value(self, target_value: int,
+                     contains: Literal["C", "P"], tag):
+        # arrange the positions starting from highest ltp
         self._sort("last_price", is_desc=True)
-        lst = [{}]
+        # initial an empty list
+        lst = []
+        # process the position list one at a time
         for entry in self.portfolio:
             if (
+                # is the position sell and target value is positive
                 entry["quantity"] < 0 and target_value > 0
+                # is the position our trading symbol
                 and re.search(
                     re.escape(self.base["EXPIRY"] + contains), entry["symbol"]
                 )
             ):
-                pos = {}
-                entry_lot = abs(entry["quantity"]) / self.base["LOT_SIZE"]
-                val_per_entry_lot = abs(entry["value"]) / entry_lot
-                target_lot = math.ceil(
-                    target_value / entry["last_price"] / self.base["LOT_SIZE"]
+                val_for_this, pos = get_val_and_pos(
+                    entry, target_value, self.base['LOT_SIZE'], tag
                 )
-                target_min_one_lot = 1 if target_lot == 0 else target_lot
-                target_final_lot = entry_lot if target_min_one_lot > entry_lot else target_min_one_lot
-                val_for_this = target_final_lot * val_per_entry_lot
+                # reduced that much value from the initial target
                 target_value -= val_for_this
-                pos["symbol"] = entry["symbol"]
-                pos["quantity"] = target_final_lot * self.base["LOT_SIZE"]
-                pos["side"] = "B"
+                # add to the main list
                 lst.append(pos)
-        logging.debug(f"{before_reducing=} vs {target_value=}")
         return target_value, lst  # Return the resulting target_value in negative
 
-    def adjust_highest_ltp(self, requested_value: int, contains: Literal["C", "P"]):
+    def adjust_highest_ltp(self, target_value: int,
+                           contains: Literal["C", "P"], tag: str
+                           ):
         self._sort("last_price", True)
         contains = self.base["EXPIRY"] + contains
-        pos = {}
-        val_for_this = 0
         for entry in self.portfolio:
             if entry["quantity"] < 0 and re.search(
                 re.escape(contains), entry["symbol"]
             ):
-                entry_lot = abs(entry["quantity"]) / self.base["LOT_SIZE"]
-                val_per_entry_lot = abs(entry["value"]) / entry_lot
-                target_lot = math.ceil(
-                    requested_value /
-                    entry["last_price"] / self.base["LOT_SIZE"]
+                val_for_this, pos = get_val_and_pos(
+                    entry, target_value, self.base['LOT_SIZE'], tag
                 )
-                logging.debug(
-                    f"{entry_lot=} vs {target_lot=} for {val_per_entry_lot=}")
-                calculated = entry_lot if target_lot > entry_lot else target_lot
-                calculated = 1 if calculated == 0 else calculated
-                # adjust_qty
-                pos["symbol"] = entry["symbol"]
-                pos["quantity"] = calculated * self.base["LOT_SIZE"]
-                pos["side"] = "B"
-                val_for_this = calculated * val_per_entry_lot
-                logging.debug(
-                    f"initially {requested_value=} and finally {val_for_this=}")
-                break
-        self._sort("value")
-        return val_for_this, pos
+                val_for_this = target_value - val_for_this
+                return val_for_this, pos
+        return 0, {}
 
-    def close_profiting_position(self) -> int:
+    def close_profiting_position(self, target_value: int, tag: str):
         for entry in self.portfolio:
             if (
                 entry["quantity"] < 0 and
@@ -95,15 +117,12 @@ class PortfolioManager:
                     re.escape(self.base["EXPIRY"]), entry["symbol"])
                 and entry["last_price"] < self.base["COVER_FOR_PROFIT"]
             ):
-                pos = dict(
-                    symbol=entry["symbol"],
-                    side="B",
-                    quantity=abs(entry["quantity"]),
-                    tag="close_profit_position"
+                val_for_this, pos = get_val_and_pos(
+                    entry, target_value, self.base['LOT_SIZE'], tag
                 )
-                print(pos)
-                return pos
-        return {}
+                val_for_this = target_value - val_for_this
+                return val_for_this, pos
+        return 0, {}
 
     def is_above_highest_ltp(self, contains: Literal["C", "P"]) -> bool:
         if any(

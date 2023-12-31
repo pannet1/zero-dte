@@ -4,7 +4,17 @@ import unittest
 from decimal import Decimal, ROUND_HALF_EVEN
 
 
-def adjust_ltp(buy_price, buffer_percent=0.5, tick_size=0.05):
+def round_val_to_qty(
+    val: int, ltp: float, base_lot: int = 15
+):
+    qty = val / ltp
+    lot = round(qty / base_lot)
+    lot = 1 if lot == 0 else lot
+    qty = lot * base_lot
+    return qty
+
+
+def adjust_ltp(buy_price: float, buffer_percent=0.5, tick_size=0.05):
     buy_price_decimal = Decimal(str(buy_price))
     buffer_amount_decimal = buy_price_decimal * \
         (Decimal(str(buffer_percent)) / 100)
