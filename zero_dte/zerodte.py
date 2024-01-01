@@ -4,12 +4,11 @@ from wserver import Wserver
 from portfolio_manager import PortfolioManager
 from paper import Paper
 from symbols import Symbols, dct_sym
-from print import prettier
+from toolkit.printutils import prettier
 from toolkit.digits import Digits
 from toolkit.round_to_paise import adjust_ltp, round_val_to_qty
 import pendulum as pdlm
 from time import sleep
-from rich import print
 import math
 import re
 import os
@@ -331,71 +330,22 @@ def is_trailing_cond(**kwargs):
         if kwargs["trailing"]["perc_decline"] > 1 + (
             kwargs["trailing"]["trailing"] * 0.1
         ):
-            kwargs = _log_and_show(
-                f' {kwargs["trailing"]["perc_decline"]} > 0.1 ', kwargs)
-            value_to_reduce = int(-0.2 * kwargs["portfolio"]["value"] / 2)
-            kwargs = _log_and_show(
-                f'{value_to_reduce=}= -0.2 X value {kwargs["portfolio"]["value"]} / 2',
-                kwargs,
-            )
-            call_value_to_reduce, lst_of_ords = pm.reduce_value(
-                value_to_reduce, contains="C"
-            )
-            for ord in lst_of_ords:
-                if any(ord):
-                    ord.update({"tag": "call_trail_stop"})
+            amount = int(-0.2 * kwargs["portfolio"]["value"] / 2)
+            tag = "trailing"
+            lst_options = ['P', 'C']
+
+            for ce_or_pe in lst_options:
+                reduced_value, lst_of_ords = pm.reduce_value(
+                    amount, ce_or_pe, tag
+                )
+                for ord in lst_of_ords:
                     _order_place(**ord)
-            kwargs = _log_and_show(
-                f"call values to reduce: {call_value_to_reduce}", kwargs
-            )
-            if call_value_to_reduce < 0:
-                symbol = obj_sym.find_closest_premium(
-                    kwargs["quotes"], base["SEL_PREMIUM"], contains="C"
-                )
-                lots = math.ceil(
-                    call_value_to_reduce /
-                    kwargs["quotes"][symbol] / base["LOT_SIZE"]
-                )
-                kwargs = _log_and_show(
-                    f"sell {lots=}fresh call {symbol}", kwargs)
-                args = {
-                    "symbol": symbol,
-                    "quantity": lots * base["LOT_SIZE"],
-                    "side": "S",
-                    "tag": "trail",
-                }
-                _order_place(**args)
-            put_value_to_reduce, lst_of_ords = pm.reduce_value(
-                value_to_reduce, contains="P"
-            )
-            for ord in lst_of_ords:
-                if any(ord):
-                    ord.update({"tag": "put_trail_stop"})
-                    _order_place(**ord)
-            kwargs = _update_metrics(**kwargs)
-            kwargs = _log_and_show(
-                f"put values to reduce: { put_value_to_reduce}", kwargs)
-            if put_value_to_reduce < 0:
-                symbol = obj_sym.find_closest_premium(
-                    kwargs["quotes"], base["SEL_PREMIUM"], contains="P"
-                )
-                lots = math.ceil(
-                    put_value_to_reduce /
-                    kwargs["quotes"][symbol] / base["LOT_SIZE"]
-                )
-                logging.debug(f"sell {lots=} fresh put {symbol}")
-                args = {
-                    "symbol": symbol,
-                    "quantity": lots * base["LOT_SIZE"],
-                    "side": "S",
-                    "tag": "trail",
-                }
-                _order_place(**args)
-            kwargs = _log_and_show(
-                f'trailed level: {kwargs["trailing"]["trailing"]}', kwargs
-            )
-            # TODO
+                if reduced_value < 0:
+                    reduced_value_order(reduced_value,
+                                        ce_or_pe,
+                                        tag)
             kwargs["trailing"]["trailing"] += 1
+            kwargs = _log_and_show(f"{tag} for {amount=}", kwargs)
             kwargs = _update_metrics(**kwargs)
         return kwargs
 

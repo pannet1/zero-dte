@@ -164,6 +164,6 @@ if __name__ == "__main__":
         "pm": pm.portfolio,
     }
     prettier(**pf)
-    val, pos = pm.reduce_value(498, 'P')
+    val, pos = pm.reduce_value(498, 'P', "test")
     sleep(2)
     print(val, pos)

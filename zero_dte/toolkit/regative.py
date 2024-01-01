@@ -1,18 +1,21 @@
-from rich.console import Console
+from rich import print
+from rich.console import Console, ConsoleOptions, RenderResult
+from rich.segment import Segment, Style
 
 
 class Regative:
     def __init__(self, val):
         self.val = val
 
-    def __rich__(self) -> str:
-        if isinstance(self.val, (int, float)) and self.val < 0:
-            return f"[bold red]{self.val}"
+    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
+        if isinstance(self.val, (int, float)):
+            if self.val < 0:
+                # return f"[bold red]{self.val}"
+                yield Segment(str(self.val), Style(color="Red"))
+            # Handle the case where the conversion to float fails
         else:
-            return f"[bold green]{self.val}"
+            yield Segment(str(self.val), Style(color="Green"))
 
 
 if __name__ == "__main__":
-    from rich import print
-
-    print(Regative("a"))
+    print(Regative(-.01))

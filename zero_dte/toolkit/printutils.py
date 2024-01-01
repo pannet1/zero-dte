@@ -1,4 +1,5 @@
 from prettytable import PrettyTable
+from rich import print
 from toolkit.regative import Regative
 
 
@@ -17,23 +18,11 @@ def prettier(**kwargs) -> dict:
                 table.add_row(item.values())
             print(table)
         else:
-            print(f"{k}: {v}")
-    # print(25 * "=", " END OF REPORT ", 25 * "=", "\n")
+            print(Regative(k), Regative(v))
+            # print(:25 * "=", " END OF REPORT ", 25 * "=", "\n")
     return kwargs
 
 
-"""
-# TODO to be removed
-def _prettify(lst):
-    if isinstance(lst, dict):
-        lst = [lst]
-    table = PrettyTable()
-    table.field_names = lst[0].keys()
-    for dct in lst:
-        table.add_row(dct.values())
-    print(table)
-"""
-
 if __name__ == "__main__":
-    kwargs = {"key": {"key2": 2}, "key2": 1}
+    kwargs = {"key1": {"key11": 11}, "key2": -2}
     prettier(**kwargs)

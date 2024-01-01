@@ -6,7 +6,6 @@ class Adjustment:
                  diff_threshold: float,
                  multiplier: int,
                  max_qty: int,
-                 admoun
                  ):
         self.above = multiplier * diff_threshold
         self.below = multiplier * -1 * diff_threshold
