@@ -64,7 +64,7 @@ class PortfolioManager:
                 pos = dict(
                     symbol=entry["symbol"],
                     side="B" if entry["quantity"] < 0 else "S",
-                    quantity=abs(entry["quantity"]),
+                    quantity=min(abs(entry["quantity"]), self.base["MAX_QTY"]),
                 )
                 yield pos
 

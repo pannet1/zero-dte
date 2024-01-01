@@ -27,6 +27,8 @@ def _positions():
 
 def opposite_order(**args):
     print(args)
+    if args["quantity"] > base["MAX_QTY"]:
+        args["quantity"] = base["MAX_QTY"]
     args["order_type"] = "MKT"
     args["exchange"] = base['EXCHANGE']
     args["disclosed_quantity"] = args["quantity"]

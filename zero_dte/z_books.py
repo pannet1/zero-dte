@@ -1,6 +1,6 @@
 from omspy_brokers.finvasia import Finvasia
 from constants import cnfg, common
-from print import prettier
+from toolkit.printutils import prettier
 
 brkr = Finvasia(**cnfg)
 if not brkr.authenticate():
