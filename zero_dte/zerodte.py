@@ -9,7 +9,6 @@ from toolkit.digits import Digits
 from toolkit.round_to_paise import adjust_ltp, round_val_to_qty
 import pendulum as pdlm
 from time import sleep
-import math
 import re
 import os
 import json
@@ -418,17 +417,21 @@ def reduced_value_order(value, ce_or_pe, tag):
     symbol = obj_sym.find_closest_premium(kwargs['quotes'],
                                           base["ADJUST_SEL_PREMIUM"],
                                           ce_or_pe)
-    args = dict(
-        symbol=symbol,
-        quantity=round_val_to_qty(
-            abs(value),
-            kwargs["quotes"][symbol],
-            base['LOT_SIZE']
-        ),
-        side="S",
-        tag=tag
+    quantity = round_val_to_qty(
+        abs(value),
+        kwargs["quotes"][symbol],
+        base['LOT_SIZE']
     )
-    _order_place(**args)
+    if quantity > 0:
+        args = dict(
+            symbol=symbol,
+            quantity=quantity,
+            side="S",
+            tag=tag
+        )
+        _order_place(**args)
+    else:
+        logging.debug(f"{quantity=} while {tag}")
 
 
 def adjust(**kwargs):

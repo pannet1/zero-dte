@@ -7,9 +7,10 @@ from decimal import Decimal, ROUND_HALF_EVEN
 def round_val_to_qty(
     val: int, ltp: float, base_lot: int = 15
 ):
+    if ltp == 0:
+        ltp = 0.05
     qty = val / ltp
     lot = round(qty / base_lot)
-    lot = 1 if lot == 0 else lot
     qty = lot * base_lot
     return qty
 
