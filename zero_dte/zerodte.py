@@ -454,7 +454,7 @@ def adjust(**kwargs):
             if any(ord):
                 _order_place(**ord)
                 log = f"adjust {ord['quantity']} {ord['symbol']}" \
-                    " {tag}"
+                    " {tag} {reduced_value=}"
                 kwargs = _log_and_show(log, kwargs)
         # level 2
         elif kwargs["perc"]["decline"] > 0.25:

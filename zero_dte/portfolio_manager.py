@@ -105,7 +105,6 @@ class PortfolioManager:
                 val_for_this, pos = get_val_and_pos(
                     entry, target_value, self.base['LOT_SIZE'], tag
                 )
-                val_for_this = target_value - val_for_this
                 return val_for_this, pos
         return 0, {}
 
