@@ -1,16 +1,5 @@
 import re
-from typing import Literal, Dict, Tuple, Any
-
-
-def target_lot_fm_value(
-    target_val: int,
-    entry_last_price: float,
-    base_lot: int = 15
-):
-    # find target quantity
-    target_qty = target_val / entry_last_price
-    target_lot = round(target_qty / base_lot)
-    return target_lot
+from typing import Literal, Dict, Tuple
 
 
 def get_val_and_pos(
@@ -19,17 +8,15 @@ def get_val_and_pos(
     # find the lot size of the position
     entry_lot = abs(entry["quantity"]) / base_lot_size
     # find the value of each position lot
-    val_per_entry_lot = abs(entry["value"]) / entry_lot
+    val_per_entry_lot = abs(entry["value"]) / base_lot_size
     # find the target lot to be covered for the target value
-    target_lot = target_lot_fm_value(
-        target_value, entry["last_price"], base_lot_size
-    )
+    target_lot = round(target_value / val_per_entry_lot)
     # if the target lot is 0 make it 1
-    target_min_one_lot = 1 if target_lot == 0 else target_lot
+    target_min_one_lot = 1 if target_lot <= 0 else target_lot
     # ensure that the target is not more than the actual position we have
     target_final_lot = entry_lot if target_min_one_lot > entry_lot else target_min_one_lot
     # how much value we will reduce if we square
-    val_for_this = target_final_lot * val_per_entry_lot
+    val_for_this = target_final_lot * base_lot_size * entry["last_price"]
     # reduced that much value from the initial target
     # add the covering trade details to the empty pos dictionary
     pos = {}
@@ -142,13 +129,13 @@ if __name__ == "__main__":
 
 # Sample data
     sample_data = [
-        {"symbol": "BANKNIFTY28DEC23C24500", "quantity": 50,
+        {"symbol": "BANKNIFTY10JAN24C24500", "quantity": 50,
             "last_price": 333.12, "value": -2000},
-        {"symbol": "BANKNIFTY28DEC23P25500", "quantity": -
-            500, "last_price": 300, "value": -500},
-        {"symbol": "BANKNIFTY28DEC23C26600", "quantity": 500,
+        {"symbol": "BANKNIFTY10JAN24P25500", "quantity": -
+            500, "last_price": 300, "value": -150000},
+        {"symbol": "BANKNIFTY10JAN24C26600", "quantity": 500,
             "last_price": 111.01, "value": 1800},
-        {"symbol": "BANKNIFTY28DEC23P27000", "quantity": 500,
+        {"symbol": "BANKNIFTY10JAN24P27000", "quantity": 500,
             "last_price": 111.03, "value": -5000},
     ]
 
@@ -161,6 +148,10 @@ if __name__ == "__main__":
         "pm": pm.portfolio,
     }
     prettier(**pf)
-    val, pos = pm.reduce_value(498, 'P', "test")
+    value_to_reduce = 100
+    option_type = "P"
+    tag = "test"
+    print(f"{value_to_reduce = } in {option_type = } {tag} \n")
+    excess_value, pos = pm.reduce_value(value_to_reduce, option_type, tag)
     sleep(2)
-    print(val, pos)
+    print(f"{excess_value = } in {pos} \n")

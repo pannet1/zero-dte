@@ -543,18 +543,18 @@ def adjust(**kwargs):
                 kwargs["quotes"][symbol],
                 base['LOT_SIZE']
             )
-            if quantity > 0:
-                args = dict(
-                    symbol=symbol,
-                    quantity=quantity,
-                    side="S",
-                    tag=tag
-                )
-                _order_place(**args)
+            quantity = max(quantity, base["LOT_SIZE"])
+            args = dict(
+                symbol=symbol,
+                quantity=quantity,
+                side="S",
+                tag=tag
+            )
+            _order_place(**args)
 
-                kwargs = _log_and_show(
-                    f"{tag} {ce_or_pe} for {amount}",
-                    kwargs)
+            kwargs = _log_and_show(
+                f"{tag} {ce_or_pe} for {amount}",
+                kwargs)
     return kwargs
 
 
