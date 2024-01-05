@@ -1,5 +1,5 @@
 from constants import fils, filepath
-from print import prettier
+from toolkit.printutils import prettier
 from time import sleep
 
 data = filepath + "data/"

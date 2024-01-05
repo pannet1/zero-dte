@@ -126,6 +126,28 @@ class Symbols:
 
         return closest_symbol
 
+    def find_symbol_in_moneyness(self,
+                                 tradingsymbol,
+                                 ce_or_pe,
+                                 price_type):
+        def find_strike(ce_or_pe):
+            search = self.symbol + self.expiry + ce_or_pe
+            # find the remaining string in the symbol after removing search
+            strike = re.sub(search, '', tradingsymbol)
+            return search, int(strike)
+
+        search, strike = find_strike(ce_or_pe)
+        if ce_or_pe == "C":
+            if price_type == "ITM":
+                return search + str(strike - dct_sym[self.symbol]["diff"])
+            else:
+                return search + str(strike + dct_sym[self.symbol]["diff"])
+        else:
+            if price_type == "ITM":
+                return search + str(strike + dct_sym[self.symbol]["diff"])
+            else:
+                return search + str(strike - dct_sym[self.symbol]["diff"])
+
     def calc_straddle_value(self, atm: int, quotes: list):
         ce = self.symbol + self.expiry + "C" + str(atm)
         pe = self.symbol + self.expiry + "P" + str(atm)

@@ -1,8 +1,5 @@
-import math
 import re
-
-from constants import logging
-from typing import Literal, Dict
+from typing import Literal, Dict, Tuple, Any
 
 
 def target_lot_fm_value(
@@ -11,7 +8,7 @@ def target_lot_fm_value(
     base_lot: int = 15
 ):
     # find target quantity
-    target_qty = target_val / entry_last_price       # round qty to the nearest lot
+    target_qty = target_val / entry_last_price
     target_lot = round(target_qty / base_lot)
     return target_lot
 
@@ -58,6 +55,7 @@ class PortfolioManager:
         self._sort("value")
         return self.portfolio
 
+    # TODO fix Any is not subscriptable
     def close_positions(self):
         for entry in self.portfolio:
             if entry["quantity"] != 0:
@@ -67,6 +65,16 @@ class PortfolioManager:
                     quantity=min(abs(entry["quantity"]), self.base["MAX_QTY"]),
                 )
                 yield pos
+
+    def is_above_highest_ltp(self, contains: Literal["C", "P"]) -> bool:
+        if any(
+            re.search(re.escape(self.base["EXPIRY"] + contains), pos["symbol"])
+            and pos["quantity"] < 0
+            and pos["last_price"] > self.base["MAX_SOLD_LTP"]
+            for pos in self.portfolio
+        ):
+            return True
+        return False
 
     def reduce_value(self, target_value: int,
                      contains: Literal["C", "P"], tag):
@@ -108,7 +116,8 @@ class PortfolioManager:
                 return val_for_this, pos
         return 0, {}
 
-    def close_profiting_position(self, target_value: int, tag: str):
+    def close_profiting_position(self, target_value: int,
+                                 tag: str) -> Tuple[int, Dict]:
         for entry in self.portfolio:
             if (
                 entry["quantity"] < 0 and
@@ -122,21 +131,11 @@ class PortfolioManager:
                 return val_for_this, pos
         return 0, {}
 
-    def is_above_highest_ltp(self, contains: Literal["C", "P"]) -> bool:
-        if any(
-            re.search(re.escape(self.base["EXPIRY"] + contains), pos["symbol"])
-            and pos["quantity"] < 0
-            and pos["last_price"] > self.base["MAX_SOLD_LTP"]
-            for pos in self.portfolio
-        ):
-            return True
-        return False
-
 
 if __name__ == "__main__":
     from constants import base
     from time import sleep
-    from print import prettier
+    from toolkit.printutils import prettier
 
     # Example usage of the class with the updated adjust_positions method
     pm = PortfolioManager(base)
