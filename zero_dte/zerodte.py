@@ -392,7 +392,8 @@ def close_profit_position(**kwargs):
         ce_or_pe = obj_sym.find_option_type(pos["symbol"])
         if ce_or_pe and reduced_value > 0:
             kwargs["trailing"][ce_or_pe] += reduced_value
-            kwargs = find_symbol_and_sell(ce_or_pe, tag, price_type="ITM")
+            kwargs = find_symbol_and_sell(
+                kwargs, ce_or_pe, tag, price_type="ITM")
             kwargs = _log_and_show(
                 f"adjust {ce_or_pe} {reduced_value} in new profit_position",
                 kwargs)
@@ -414,7 +415,7 @@ def is_portfolio_stop(**kwargs):
     return kwargs
 
 
-def find_symbol_and_sell(ce_or_pe, tag: str, price_type=None):
+def find_symbol_and_sell(kwargs, ce_or_pe, tag: str, price_type=None):
     value_deficit = kwargs["trailing"][ce_or_pe]
     if value_deficit > 0:
         symbol = obj_sym.find_closest_premium(kwargs['quotes'],
@@ -495,9 +496,9 @@ def adjust(**kwargs):
                 _order_place(**ord)
             if reduced_value < 0:
                 deficit += abs(reduced_value)
-                kwargs = find_symbol_and_sell(
-                    ce_or_pe, tag, price_type="OTM"
-                )
+                kwargs = find_symbol_and_sell(kwargs,
+                                              ce_or_pe, tag, price_type="OTM"
+                                              )
             kwargs = _log_and_show(f"{ce_or_pe} {tag}", kwargs)
         # level 3
         elif kwargs["perc"]["curr_pfolio"] < -0.05:
@@ -510,9 +511,9 @@ def adjust(**kwargs):
                 _order_place(**ord)
             if reduced_value < 0:
                 deficit += abs(reduced_value)
-                kwargs = find_symbol_and_sell(
-                    ce_or_pe, tag, price_type="OTM"
-                )
+                kwargs = find_symbol_and_sell(kwargs,
+                                              ce_or_pe, tag, price_type="OTM"
+                                              )
             kwargs = _log_and_show(f"{ce_or_pe} {tag}", kwargs)
         # level 4
         elif kwargs["quantity"]["sell"] >= base["ADJUST_MAX_QTY"]:
@@ -531,13 +532,29 @@ def adjust(**kwargs):
             ce_or_pe = "P" if ce_or_pe == "C" else "C"
             kwargs["adjust"]["adjust"] = 5
             tag = "adjust_fresh_sell"
-            deficit += amount
-            kwargs = find_symbol_and_sell(
-                ce_or_pe, tag, price_type="OTM"
+            symbol = obj_sym.find_closest_premium(kwargs['quotes'],
+                                                  base["ADJUST_SEL_PREMIUM"],
+                                                  ce_or_pe)
+            symbol = obj_sym.find_symbol_in_moneyness(symbol,
+                                                      ce_or_pe,
+                                                      "OTM")
+            quantity = round_val_to_qty(
+                amount,
+                kwargs["quotes"][symbol],
+                base['LOT_SIZE']
             )
-            kwargs = _log_and_show(
-                f"{tag} {ce_or_pe} for {amount}",
-                kwargs)
+            if quantity > 0:
+                args = dict(
+                    symbol=symbol,
+                    quantity=quantity,
+                    side="S",
+                    tag=tag
+                )
+                _order_place(**args)
+
+                kwargs = _log_and_show(
+                    f"{tag} {ce_or_pe} for {amount}",
+                    kwargs)
     return kwargs
 
 
