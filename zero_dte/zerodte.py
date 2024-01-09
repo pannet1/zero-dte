@@ -478,14 +478,42 @@ def adjust(**kwargs):
         if is_above_highest_ltp(kwargs["positions"], contains=ce_or_pe):
             kwargs["adjust"]["adjust"] = 1
             tag = "adjust_highest_ltp"
-            reduced_value, ord = adjust_highest_ltp(
+            value_for_this, ord = adjust_highest_ltp(
                 kwargs["positions"],
                 amount, ce_or_pe, tag)
             if any(ord):
                 _order_place(**ord)
-                log = f"adjust {ord['quantity']} {ord['symbol']}" \
-                    f"{tag} {reduced_value=}"
-                kwargs = _log_and_show(log, kwargs)
+                kwargs = _log_and_show(
+                    f"{tag}: covered {ord['symbol']} {ord['quantity']}q",
+                    kwargs)
+                reduced_value = value_for_this - amount
+                ce_or_pe = obj_sym.find_option_type(ord["symbol"])
+                if ce_or_pe and reduced_value > 0:
+                    symbol = obj_sym.find_closest_premium(kwargs['quotes'],
+                                                          base["ADJUST_SEL_PREMIUM"],
+                                                          ce_or_pe)
+                    symbol = obj_sym.find_symbol_in_moneyness(symbol,
+                                                              ce_or_pe,
+                                                              price_type="OTM")
+                    quantity = round_val_to_qty(
+                        reduced_value,
+                        kwargs["quotes"][symbol],
+                        base['LOT_SIZE']
+                    )
+                    if quantity > 0:
+                        args = dict(
+                            symbol=symbol,
+                            quantity=quantity,
+                            side="S",
+                            tag=tag
+                        )
+                        _order_place(**args)
+                        # TODO
+                        kwargs = _log_and_show(
+                            f"{tag} {reduced_value=} in {symbol} {quantity}q",
+                            kwargs)
+                kwargs = _update_metrics(**kwargs)
+
         # level 2
         elif kwargs["perc"]["decline"] > 0.25:
             kwargs["adjust"]["adjust"] = 2
