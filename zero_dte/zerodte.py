@@ -470,7 +470,7 @@ def adjust(**kwargs):
         # level 1
         deficit = kwargs["trailing"][ce_or_pe]
         amount = kwargs["adjust"]["amount"]
-        if is_above_highest_ltp(contains=ce_or_pe):
+        if is_above_highest_ltp(kwargs["positions"], contains=ce_or_pe):
             kwargs["adjust"]["adjust"] = 1
             tag = "adjust_highest_ltp"
             reduced_value, ord = adjust_highest_ltp(
