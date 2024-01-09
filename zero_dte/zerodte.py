@@ -4,33 +4,31 @@ from wserver import Wserver
 from portfolio_manager import PortfolioManager
 from paper import Paper
 from symbols import Symbols, dct_sym
-from toolkit.printutils import prettier
-from toolkit.digits import Digits
-from toolkit.round_to_paise import adjust_ltp, round_val_to_qty
+from utilities.printutils import prettier
+from utilities.digits import Digits
+from utilities.utils import adjust_ltp, round_val_to_qty
+from adjustment import adjust_highest_ltp, reduce_value, is_above_highest_ltp, close_profiting_position
 import pendulum as pdlm
 from time import sleep
 import re
 import os
 import json
 import sys
+from typing import Dict
 
 
-slp = 1
-PAPER_ATM = 47100
-SYMBOL = common["base"]
-kwargs = {
-    "quotes": {},
-    "trailing": {"trailing": 0, "C": 0, "P": 0},
-    "perc": {"perc": "perc"},
-    "adjust": {"adjust": 0, "max_qty": base['ADJUST_MAX_QTY']},
-    "positions": [],
-    "quantity": {"quantity": SYMBOL, "is_new": 0},
-    "portfolio": {"is_pyramid": True,  "last": "Happy Trading"}
-}
-
-pm = PortfolioManager(base)
-obj_sym = Symbols(base['EXCHANGE'], SYMBOL, base["EXPIRY"])
-obj_sym.get_exchange_token_map_finvasia()
+def log_rotate():
+    files = fils.get_files_with_extn("json", data)
+    files = [file.split(".")[0] for file in files]
+    files = [file for file in files
+             if file.isdigit()]
+    for file in files:
+        pathfile = data + str(file) + ".json"
+        if fils.is_file_not_2day(pathfile):
+            fils.del_file(pathfile)
+    pathfile = data + "orders.json"
+    if fils.is_file_not_2day(pathfile):
+        fils.nuke_file(pathfile)
 
 
 def _log_and_show(text, kwargs):
@@ -54,13 +52,21 @@ def _append_to_json(data, filename):
             json.dump(data, file, ensure_ascii=False, indent=4, default=str)
 
 
+def _save_file(kwargs):
+    now = pdlm.now()
+    fname = str(now.format('H')).zfill(2) + \
+        str(now.format('m')).zfill(2) + \
+        str(now.format('s')).zfill(2)
+    fils.save_file(kwargs, data + fname)
+
+
 def _reset_trail(**kwargs):
     kwargs["trailing"]["reset_high"] = -100
     kwargs["trailing"]["perc_decline"] = -100
     return kwargs
 
 
-def _hl_cls(brkr, quantity):
+def _hl_cls(brkr, quantity: Dict) -> Dict:
     hi = quantity.get("hi", 0)
     lo = quantity.get("lo", 0)
     keys = ["h", "l", "lp"]
@@ -125,14 +131,14 @@ def _positions(**kwargs):
     if any(positions):
         # filter by dict keys
         positions = [{key: dct[key] for key in keys} for dct in positions]
+        # remove positions that does not begin with symbol name
+        positions = [pos for pos in positions if pos["symbol"].startswith(
+            kwargs["quantity"]["quantity"])]
         # calc value
         for pos in positions:
             straddle = kwargs["quantity"].get('straddle', pos["last_price"])
             ltp = min(pos["last_price"], straddle)
             pos["value"] = int(pos["quantity"] * ltp)
-        # remove positions that does not begin with symbol name
-        positions = [pos for pos in positions if pos["symbol"].startswith(
-            kwargs["quantity"]["quantity"])]
     kwargs["positions"] = pm.update(positions)
     return kwargs
 
@@ -145,11 +151,6 @@ def _allowed_lot(**kwargs):
     simul_qty = (entry_lot * 2 * base["LOT_SIZE"]) + sold_quantities
     if entry_lot > 0 and (simul_qty <= base['MAX_QTY']):
         kwargs['portfolio']['lotsize'] = entry_lot
-    """
-    else:
-        kwargs = _log_and_show(
-            f"Q0: {entry_lot=} vs {simul_qty=} > {base['MAX_QTY']}", kwargs)
-    """
     return kwargs
 
 
@@ -207,6 +208,7 @@ def _update_metrics(**kwargs):
         quantity["atm"], kwargs["quotes"])
     kwargs = _positions(**kwargs)
     kwargs = _allowed_lot(**kwargs)
+
     # portfolio
     sell_value = 0
     for pos in kwargs["positions"]:
@@ -226,6 +228,7 @@ def _update_metrics(**kwargs):
             "rpnl": rpnl,
             "PNL": pnl
         })
+
     # quantity
     sell = 0
     for pos in kwargs["positions"]:
@@ -249,6 +252,7 @@ def _update_metrics(**kwargs):
         min_pfolio=min_pfolio,
         improve=improve,
     )
+
     # trailing
     if kwargs["perc"]["max_pfolio"] >= 0.5:
         kwargs["trailing"]["reset_high"] = max(
@@ -288,12 +292,7 @@ def _update_metrics(**kwargs):
         "ratio": round(ratio, 5),
         "amount": abs(int(diff * base["ADJUST_PERC"] / 100)),
     })
-
-    now = pdlm.now()
-    fname = str(now.format('H')).zfill(2) + \
-        str(now.format('m')).zfill(2) + \
-        str(now.format('s')).zfill(2)
-    fils.save_file(kwargs, data + fname)
+    _save_file(kwargs)
     return kwargs
 
 
@@ -331,19 +330,19 @@ def is_trailing_cond(**kwargs):
             kwargs["trailing"]["trailing"] * 0.1
         ):
             amount = int(-0.2 * kwargs["portfolio"]["value"] / 2)
-            tag = "trailing",
+            tag = "trailing"
             lst_options = ['P', 'C']
 
             for ce_or_pe in lst_options:
-                reduced_value, lst_of_ords = pm.reduce_value(
+                reduced_value, lst_of_ords = reduce_value(
+                    kwargs["positions"],
                     amount, ce_or_pe, tag
                 )
                 for ord in lst_of_ords:
                     _order_place(**ord)
                 if reduced_value < 0:
-                    reduced_value_order(reduced_value,
-                                        ce_or_pe,
-                                        tag)
+                    kwargs["trailing"][ce_or_pe] += abs(reduced_value)
+                    kwargs = find_symbol_and_sell(kwargs, ce_or_pe, tag)
             kwargs["trailing"]["trailing"] += 1
             kwargs = _log_and_show(f"{tag} for {amount=}", kwargs)
             kwargs = _update_metrics(**kwargs)
@@ -381,24 +380,39 @@ def toggle_pyramid(**kwargs):
 def close_profit_position(**kwargs):
     kwargs["portfolio"]["fn"] = is_portfolio_stop
     tag = "close_profit_position"
-    value_to_reduce = base["ADJUST_SEL_PREMIUM"] * 2 * base['LOT_SIZE']
-    reduced_value, pos = pm.close_profiting_position(
-        value_to_reduce, tag)
+    value_for_this, pos = close_profiting_position(
+        kwargs["positions"], kwargs["trailing"]["profit_val"], tag)
     if any(pos):
         _order_place(**pos)
-
-        kwargs = _log_and_show(tag, kwargs)
         # find option to cover
+        kwargs = _log_and_show(
+            f"{tag} covering {pos['symbol']} {pos['quantity']}",
+            kwargs)
         ce_or_pe = obj_sym.find_option_type(pos["symbol"])
-        if ce_or_pe and reduced_value > 0:
-            kwargs["trailing"][ce_or_pe] += reduced_value
-            kwargs = find_symbol_and_sell(
-                kwargs, ce_or_pe, tag, price_type="ITM")
+        if ce_or_pe and value_for_this > 0:
+            symbol = obj_sym.find_closest_premium(kwargs['quotes'],
+                                                  base["ADJUST_SEL_PREMIUM"],
+                                                  ce_or_pe)
+            symbol = obj_sym.find_symbol_in_moneyness(symbol,
+                                                      ce_or_pe,
+                                                      price_type="ITM")
+            quantity = round_val_to_qty(
+                value_for_this,
+                kwargs["quotes"][symbol],
+                base['LOT_SIZE']
+            )
+            quantity = min(quantity, base['LOT_SIZE'])
+            args = dict(
+                symbol=symbol,
+                quantity=quantity,
+                side="S",
+                tag=tag
+            )
+            _order_place(**args)
             kwargs = _log_and_show(
-                f"adjust {ce_or_pe} {reduced_value} in new profit_position",
+                f"{tag}: {value_for_this} in new {symbol} {quantity}",
                 kwargs)
-            kwargs = _log_and_show(tag, kwargs)
-        kwargs = _update_metrics(**kwargs)
+    kwargs = _update_metrics(**kwargs)
     return kwargs
 
 
@@ -426,7 +440,7 @@ def find_symbol_and_sell(kwargs, ce_or_pe, tag: str, price_type=None):
                                                       ce_or_pe,
                                                       price_type)
         quantity = round_val_to_qty(
-            kwargs["trailing"][ce_or_pe],
+            value_deficit,
             kwargs["quotes"][symbol],
             base['LOT_SIZE']
         )
@@ -439,28 +453,8 @@ def find_symbol_and_sell(kwargs, ce_or_pe, tag: str, price_type=None):
             )
             _order_place(**args)
             value_deficit -= int(args["quantity"] * kwargs["quotes"][symbol])
+            kwargs["trailing"][ce_or_pe] = value_deficit
     return kwargs
-
-
-def reduced_value_order(value, ce_or_pe, tag):
-    symbol = obj_sym.find_closest_premium(kwargs['quotes'],
-                                          base["ADJUST_SEL_PREMIUM"],
-                                          ce_or_pe)
-    quantity = round_val_to_qty(
-        abs(value),
-        kwargs["quotes"][symbol],
-        base['LOT_SIZE']
-    )
-    if quantity > 0:
-        args = dict(
-            symbol=symbol,
-            quantity=quantity,
-            side="S",
-            tag=tag
-        )
-        _order_place(**args)
-    else:
-        logging.debug(f"{quantity=} while {tag}")
 
 
 def adjust(**kwargs):
@@ -476,21 +470,23 @@ def adjust(**kwargs):
         # level 1
         deficit = kwargs["trailing"][ce_or_pe]
         amount = kwargs["adjust"]["amount"]
-        if pm.is_above_highest_ltp(contains=ce_or_pe):
+        if is_above_highest_ltp(contains=ce_or_pe):
             kwargs["adjust"]["adjust"] = 1
             tag = "adjust_highest_ltp"
-            reduced_value, ord = pm.adjust_highest_ltp(
+            reduced_value, ord = adjust_highest_ltp(
+                kwargs["positions"],
                 amount, ce_or_pe, tag)
             if any(ord):
                 _order_place(**ord)
                 log = f"adjust {ord['quantity']} {ord['symbol']}" \
-                    " {tag} {reduced_value=}"
+                    f"{tag} {reduced_value=}"
                 kwargs = _log_and_show(log, kwargs)
         # level 2
         elif kwargs["perc"]["decline"] > 0.25:
             kwargs["adjust"]["adjust"] = 2
             tag = "adjust_decline_perc"
-            reduced_value, lst_of_ords = pm.reduce_value(
+            reduced_value, lst_of_ords = reduce_value(
+                kwargs["positions"],
                 amount, ce_or_pe, tag)
             for ord in lst_of_ords:
                 _order_place(**ord)
@@ -504,7 +500,8 @@ def adjust(**kwargs):
         elif kwargs["perc"]["curr_pfolio"] < -0.05:
             kwargs["adjust"]["adjust"] = 3
             tag = "adjust_neg_pfolio"
-            reduced_value, lst_of_ords = pm.reduce_value(
+            reduced_value, lst_of_ords = reduce_value(
+                kwargs["positions"],
                 amount, ce_or_pe, tag
             )
             for ord in lst_of_ords:
@@ -514,19 +511,20 @@ def adjust(**kwargs):
                 kwargs = find_symbol_and_sell(kwargs,
                                               ce_or_pe, tag, price_type="OTM"
                                               )
-            kwargs = _log_and_show(f"{ce_or_pe} {tag}", kwargs)
+                kwargs = _log_and_show(f"{ce_or_pe} {tag}", kwargs)
         # level 4
         elif kwargs["quantity"]["sell"] >= base["ADJUST_MAX_QTY"]:
             kwargs["adjust"]["adjust"] = 4
             tag = "adjust_max_qty"
-            _, lst_of_ords = pm.reduce_value(
+            _, lst_of_ords = reduce_value(
+                kwargs["positions"],
                 amount, ce_or_pe, tag
             )
             for ord in lst_of_ords:
                 _order_place(**ord)
-            kwargs = _log_and_show(
-                f"{ce_or_pe} {kwargs['quantity']['sell']} >= " +
-                "adjust_max_qty {base['ADJUST_MAX_QTY']}", kwargs)
+            txt = f"{ce_or_pe} {kwargs['quantity']['sell']} >=" + \
+                f"adjust_max_qty {base['ADJUST_MAX_QTY']}"
+            kwargs = _log_and_show(txt, kwargs)
         # level 5
         else:
             ce_or_pe = "P" if ce_or_pe == "C" else "C"
@@ -578,20 +576,24 @@ def get_brkr_and_wserver():
     return brkr, wserver
 
 
-# TODO
-files = fils.get_files_with_extn("json", data)
-files = [file.split(".")[0] for file in files]
-files = [file for file in files
-         if file.isdigit()]
-for file in files:
-    pathfile = data + str(file) + ".json"
-    if fils.is_file_not_2day(pathfile):
-        obj = fils.del_file(pathfile)
-pathfile = data + "orders.json"
-if fils.is_file_not_2day(pathfile):
-    fils.nuke_file(pathfile)
+slp = 1
+PAPER_ATM = 47100
+SYMBOL = common["base"]
+profit_val = base["ENTRY_PERC"] * 2 / 100 * base["MAX_QTY"] * base["LOT_SIZE"]
+kwargs = {
+    "quotes": {},
+    "trailing": {"trailing": 0, "C": 0, "P": 0, "profit_val": profit_val},
+    "perc": {"perc": "perc"},
+    "adjust": {"adjust": 0, "max_qty": base['ADJUST_MAX_QTY']},
+    "positions": [],
+    "quantity": {"quantity": SYMBOL, "is_new": 0},
+    "portfolio": {"is_pyramid": True,  "last": "Happy Trading"}
+}
 
-
+log_rotate()
+obj_sym = Symbols(base['EXCHANGE'], SYMBOL, base["EXPIRY"])
+obj_sym.get_exchange_token_map_finvasia()
+pm = PortfolioManager()
 brkr, wserver = get_brkr_and_wserver()
 while not any(kwargs['quotes']):
     print("waiting for quote \n")
@@ -599,7 +601,6 @@ while not any(kwargs['quotes']):
     print(kwargs['quotes'])
     sleep(slp)
 
-print(wserver.ltp)
 
 kwargs = _reset_trail(**kwargs)
 kwargs = _allowed_lot(**kwargs)

@@ -1,8 +1,8 @@
 from random import randint
 import pendulum as plum
 import pandas as pd
-from toolkit.utils import calc_m2m
-from toolkit.printutils import prettier
+from utilities.utils import calc_m2m
+from utilities.printutils import prettier
 
 
 class Paper:

@@ -1,4 +1,4 @@
-from stratergy.mcx import Mcx
+from mcx import Mcx
 from omspy_brokers.finvasia import Finvasia
 from constants import common, smcx, cnfg, logging
 import pendulum as pdlm
@@ -22,7 +22,8 @@ squareoff = authenticate_and_initialize()
 while True:
     try:
         if (
-            pdlm.now().time().add(hours=common["h"], minutes=common["m"]) > squareoff
+            pdlm.now().time().add(
+                hours=common["h"], minutes=common["m"]) > squareoff
         ) or (Mcx.get_mcx_m2m() < smcx["STOP"]):
             Mcx.pack_and_go()
         elif (
