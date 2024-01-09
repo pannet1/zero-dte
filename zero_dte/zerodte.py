@@ -37,7 +37,8 @@ def _log_and_show(text, kwargs):
     returns kwargs
     """
     logging.info(text)
-    kwargs["portfolio"]["last"] = text
+    fname = _now()
+    kwargs["portfolio"]["last"] = fname + ": " + text
     return kwargs
 
 
@@ -52,11 +53,16 @@ def _append_to_json(data, filename):
             json.dump(data, file, ensure_ascii=False, indent=4, default=str)
 
 
-def _save_file(kwargs):
+def _now() -> str:
     now = pdlm.now()
     fname = str(now.format('H')).zfill(2) + \
         str(now.format('m')).zfill(2) + \
         str(now.format('s')).zfill(2)
+    return fname
+
+
+def _save_file(kwargs):
+    fname = _now()
     fils.save_file(kwargs, data + fname)
 
 
@@ -401,7 +407,7 @@ def close_profit_position(**kwargs):
                 kwargs["quotes"][symbol],
                 base['LOT_SIZE']
             )
-            quantity = min(quantity, base['LOT_SIZE'])
+            quantity = max(quantity, base['LOT_SIZE'])
             args = dict(
                 symbol=symbol,
                 quantity=quantity,
@@ -468,7 +474,6 @@ def adjust(**kwargs):
 
     if ce_or_pe:
         # level 1
-        deficit = kwargs["trailing"][ce_or_pe]
         amount = kwargs["adjust"]["amount"]
         if is_above_highest_ltp(kwargs["positions"], contains=ce_or_pe):
             kwargs["adjust"]["adjust"] = 1
@@ -491,10 +496,10 @@ def adjust(**kwargs):
             for ord in lst_of_ords:
                 _order_place(**ord)
             if reduced_value < 0:
-                deficit += abs(reduced_value)
-                kwargs = find_symbol_and_sell(kwargs,
-                                              ce_or_pe, tag, price_type="OTM"
-                                              )
+                kwargs["trailing"][ce_or_pe] += abs(reduced_value)
+            kwargs = find_symbol_and_sell(kwargs,
+                                          ce_or_pe, tag, price_type="OTM"
+                                          )
             kwargs = _log_and_show(f"{ce_or_pe} {tag}", kwargs)
         # level 3
         elif kwargs["perc"]["curr_pfolio"] < -0.05:
@@ -507,11 +512,11 @@ def adjust(**kwargs):
             for ord in lst_of_ords:
                 _order_place(**ord)
             if reduced_value < 0:
-                deficit += abs(reduced_value)
-                kwargs = find_symbol_and_sell(kwargs,
-                                              ce_or_pe, tag, price_type="OTM"
-                                              )
-                kwargs = _log_and_show(f"{ce_or_pe} {tag}", kwargs)
+                kwargs["trailing"][ce_or_pe] += abs(reduced_value)
+            kwargs = find_symbol_and_sell(kwargs,
+                                          ce_or_pe, tag, price_type="OTM"
+                                          )
+            kwargs = _log_and_show(f"{ce_or_pe} {tag}", kwargs)
         # level 4
         elif kwargs["quantity"]["sell"] >= base["ADJUST_MAX_QTY"]:
             kwargs["adjust"]["adjust"] = 4
