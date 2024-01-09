@@ -412,7 +412,7 @@ def close_profit_position(**kwargs):
             kwargs = _log_and_show(
                 f"{tag}: {value_for_this} in new {symbol} {quantity}",
                 kwargs)
-    kwargs = _update_metrics(**kwargs)
+        kwargs = _update_metrics(**kwargs)
     return kwargs
 
 
