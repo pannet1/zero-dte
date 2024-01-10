@@ -469,8 +469,12 @@ def adjust(**kwargs):
 
     if kwargs["adjust"]["ratio"] >= base["UP_THRESH"] * 1:
         ce_or_pe = "C"
+        if kwargs["adjust"]["ratio"] >= (base["UP_THRESH"] - .05):
+            kwargs["trailing"]["C"] = True
     elif kwargs["adjust"]["ratio"] <= base["DN_THRESH"] * -1:
         ce_or_pe = "P"
+        if kwargs["adjust"]["ratio"] <= (base["DN_THRESH"] + .05):
+            kwargs["trailing"]["P"] = True
 
     if ce_or_pe:
         # level 1
@@ -488,7 +492,7 @@ def adjust(**kwargs):
                     kwargs)
                 reduced_value = value_for_this - amount
                 ce_or_pe = obj_sym.find_option_type(ord["symbol"])
-                if ce_or_pe and reduced_value > 0:
+                if ce_or_pe and reduced_value > 0 and kwargs["trailing"][ce_or_pe]:
                     symbol = obj_sym.find_closest_premium(kwargs['quotes'],
                                                           base["ADJUST_SEL_PREMIUM"],
                                                           ce_or_pe)
@@ -527,7 +531,7 @@ def adjust(**kwargs):
                 _order_place(**ord)
                 ce_or_pe = obj_sym.find_option_type(ord["symbol"])
 
-            if ce_or_pe and reduced_value < 0:
+            if ce_or_pe and reduced_value < 0 and kwargs["trailing"][ce_or_pe]:
                 reduced_value = abs(reduced_value)
                 symbol = obj_sym.find_closest_premium(kwargs['quotes'],
                                                       base["ADJUST_SEL_PREMIUM"],
@@ -566,7 +570,7 @@ def adjust(**kwargs):
                 _order_place(**ord)
                 ce_or_pe = obj_sym.find_option_type(ord["symbol"])
 
-            if ce_or_pe and reduced_value < 0:
+            if ce_or_pe and reduced_value < 0 and kwargs["trailing"][ce_or_pe]:
                 reduced_value = abs(reduced_value)
                 symbol = obj_sym.find_closest_premium(kwargs['quotes'],
                                                       base["ADJUST_SEL_PREMIUM"],
@@ -659,7 +663,7 @@ SYMBOL = common["base"]
 profit_val = base["ENTRY_PERC"] * 2 / 100 * base["MAX_QTY"] * base["LOT_SIZE"]
 kwargs = {
     "quotes": {},
-    "trailing": {"trailing": 0, "C": 0, "P": 0, "profit_val": profit_val},
+    "trailing": {"trailing": 0, "C": False, "P": False, "profit_val": profit_val},
     "perc": {"perc": "perc"},
     "adjust": {"adjust": 0, "max_qty": base['ADJUST_MAX_QTY']},
     "positions": [],
