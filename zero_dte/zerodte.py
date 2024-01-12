@@ -469,7 +469,7 @@ def adjust(**kwargs):
 
     if kwargs["adjust"]["ratio"] >= base["UP_THRESH"]:
         ce_or_pe = "C"
-        if kwargs["adjust"]["ratio"] >= (base["UP_THRESH"] - .05):
+        if kwargs["adjust"]["ratio"] <= (base["UP_THRESH"] - .05):
             kwargs["trailing"]["C"] = True
         else:
             kwargs["trailing"]["C"] = False
