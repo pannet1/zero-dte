@@ -467,14 +467,18 @@ def adjust(**kwargs):
     kwargs["portfolio"]["fn"] = is_pyramid_cond
     ce_or_pe = None
 
-    if kwargs["adjust"]["ratio"] >= base["UP_THRESH"] * 1:
+    if kwargs["adjust"]["ratio"] >= base["UP_THRESH"]:
         ce_or_pe = "C"
         if kwargs["adjust"]["ratio"] >= (base["UP_THRESH"] - .05):
             kwargs["trailing"]["C"] = True
+        else:
+            kwargs["trailing"]["C"] = False
     elif kwargs["adjust"]["ratio"] <= base["DN_THRESH"] * -1:
         ce_or_pe = "P"
-        if kwargs["adjust"]["ratio"] <= (base["DN_THRESH"] + .05):
+        if kwargs["adjust"]["ratio"] <= ((base["DN_THRESH"] * -1) + .05):
             kwargs["trailing"]["P"] = True
+        else:
+            kwargs["trailing"]["P"] = False
 
     if ce_or_pe:
         # level 1
