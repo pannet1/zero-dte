@@ -289,14 +289,14 @@ def _update_metrics(**kwargs):
         if re.search(re.escape(base["EXPIRY"] + "P"), pos["symbol"])
         and pos["quantity"] < 0
     )
-    diff = call_value - put_value
+    diff = call_value + put_value
     ratio = 0 if sell_value == 0 else diff / sell_value
     kwargs["adjust"].update({
         "call_value": call_value,
         "put_value": put_value,
         "diff": diff,
         "ratio": round(ratio, 5),
-        "amount": abs(int(diff * base["ADJUST_PERC"] / 100)),
+        "amount": abs(int(sell_value * base["ADJUST_PERC"] / 100)),
     })
     _save_file(kwargs)
     return kwargs
@@ -347,10 +347,9 @@ def is_trailing_cond(**kwargs):
                 for ord in lst_of_ords:
                     _order_place(**ord)
                 if reduced_value < 0:
-                    kwargs["trailing"][ce_or_pe] += abs(reduced_value)
-                kwargs = find_symbol_and_sell(kwargs, ce_or_pe, tag)
+                    kwargs["trailing"][ce_or_pe] = abs(reduced_value)
+                    kwargs = find_symbol_and_sell(kwargs, ce_or_pe, tag)
             kwargs["trailing"]["trailing"] += 1
-            kwargs = _log_and_show(f"{tag} for {amount=}", kwargs)
             kwargs = _update_metrics(**kwargs)
         return kwargs
 
@@ -435,32 +434,25 @@ def is_portfolio_stop(**kwargs):
     return kwargs
 
 
-def find_symbol_and_sell(kwargs, ce_or_pe, tag: str, price_type=None):
-    value_deficit = kwargs["trailing"][ce_or_pe]
-    if value_deficit > 0:
-        symbol = obj_sym.find_closest_premium(kwargs['quotes'],
-                                              base["ADJUST_SEL_PREMIUM"],
-                                              ce_or_pe)
-        if price_type:
-            symbol = obj_sym.find_symbol_in_moneyness(symbol,
-                                                      ce_or_pe,
-                                                      price_type)
-        quantity = round_val_to_qty(
-            value_deficit,
-            kwargs["quotes"][symbol],
-            base['LOT_SIZE']
+def find_symbol_and_sell(kwargs, ce_or_pe, tag: str):
+    symbol = obj_sym.find_closest_premium(kwargs['quotes'],
+                                          base["ADJUST_SEL_PREMIUM"],
+                                          ce_or_pe)
+    quantity = round_val_to_qty(
+        kwargs["trailing"][ce_or_pe],
+        kwargs["quotes"][symbol],
+        base['LOT_SIZE']
+    )
+    if quantity > 0:
+        tag = f"{tag}: sold {symbol} {quantity}q"
+        args = dict(
+            symbol=symbol,
+            quantity=quantity,
+            side="S",
+            tag=tag
         )
-        if quantity > 0:
-            args = dict(
-                symbol=symbol,
-                quantity=quantity,
-                side="S",
-                tag=tag
-            )
-            _order_place(**args)
-            value_deficit -= int(args["quantity"] * kwargs["quotes"][symbol])
-            kwargs["trailing"][ce_or_pe] = value_deficit
-    return kwargs
+        _log_and_show(tag, kwargs)
+        _order_place(**args)
 
 
 def adjust(**kwargs):
@@ -469,16 +461,8 @@ def adjust(**kwargs):
 
     if kwargs["adjust"]["ratio"] >= base["UP_THRESH"]:
         ce_or_pe = "C"
-        if kwargs["adjust"]["ratio"] <= (base["UP_THRESH"] - .05):
-            kwargs["trailing"]["C"] = True
-        else:
-            kwargs["trailing"]["C"] = False
     elif kwargs["adjust"]["ratio"] <= base["DN_THRESH"] * -1:
         ce_or_pe = "P"
-        if kwargs["adjust"]["ratio"] <= ((base["DN_THRESH"] * -1) + .05):
-            kwargs["trailing"]["P"] = True
-        else:
-            kwargs["trailing"]["P"] = False
 
     if ce_or_pe:
         # level 1
@@ -495,31 +479,10 @@ def adjust(**kwargs):
                     f"{tag}: covered {ord['symbol']} {ord['quantity']}q",
                     kwargs)
                 reduced_value = value_for_this - amount
-                ce_or_pe = obj_sym.find_option_type(ord["symbol"])
-                if ce_or_pe and reduced_value > 0 and kwargs["trailing"][ce_or_pe]:
-                    symbol = obj_sym.find_closest_premium(kwargs['quotes'],
-                                                          base["ADJUST_SEL_PREMIUM"],
-                                                          ce_or_pe)
-                    symbol = obj_sym.find_symbol_in_moneyness(symbol,
-                                                              ce_or_pe,
-                                                              price_type="OTM")
-                    quantity = round_val_to_qty(
-                        reduced_value,
-                        kwargs["quotes"][symbol],
-                        base['LOT_SIZE']
-                    )
-                    if quantity > 0:
-                        args = dict(
-                            symbol=symbol,
-                            quantity=quantity,
-                            side="S",
-                            tag=tag
-                        )
-                        _order_place(**args)
-                        kwargs = _log_and_show(
-                            f"{tag} {reduced_value=} in {symbol} {quantity}q",
-                            kwargs)
-                kwargs = _update_metrics(**kwargs)
+                if reduced_value > 0:
+                    kwargs["trailing"][ce_or_pe] = reduced_value
+                    find_symbol_and_sell(kwargs, ce_or_pe, tag)
+            kwargs = _update_metrics(**kwargs)
 
         # level 2
         elif kwargs["perc"]["decline"] > 0.25:
@@ -528,37 +491,14 @@ def adjust(**kwargs):
             reduced_value, ords = reduce_value(
                 kwargs["positions"],
                 amount, ce_or_pe, tag)
-            kwargs = _log_and_show(
-                f"{tag} covering {reduced_value=}",
-                kwargs)
             for ord in ords:
                 _order_place(**ord)
-                ce_or_pe = obj_sym.find_option_type(ord["symbol"])
-
-            if ce_or_pe and reduced_value < 0 and kwargs["trailing"][ce_or_pe]:
-                reduced_value = abs(reduced_value)
-                symbol = obj_sym.find_closest_premium(kwargs['quotes'],
-                                                      base["ADJUST_SEL_PREMIUM"],
-                                                      ce_or_pe)
-                symbol = obj_sym.find_symbol_in_moneyness(symbol,
-                                                          ce_or_pe,
-                                                          price_type="OTM")
-                quantity = round_val_to_qty(
-                    reduced_value,
-                    kwargs["quotes"][symbol],
-                    base['LOT_SIZE']
-                )
-                if quantity > 0:
-                    args = dict(
-                        symbol=symbol,
-                        quantity=quantity,
-                        side="S",
-                        tag=tag
-                    )
-                    _order_place(**args)
-                    kwargs = _log_and_show(
-                        f"{tag} {reduced_value=} in {symbol} {quantity}q",
-                        kwargs)
+                kwargs = _log_and_show(
+                    f"{tag} covering {ord['symbol']}",
+                    kwargs)
+            if reduced_value < 0:
+                kwargs["trailing"][ce_or_pe] = abs(reduced_value)
+                find_symbol_and_sell(kwargs, ce_or_pe, tag)
             kwargs = _update_metrics(**kwargs)
         # level 3
         elif kwargs["perc"]["curr_pfolio"] < -0.05:
@@ -567,37 +507,14 @@ def adjust(**kwargs):
             reduced_value, ords = reduce_value(
                 kwargs["positions"],
                 amount, ce_or_pe, tag)
-            kwargs = _log_and_show(
-                f"{tag} covering {reduced_value=}",
-                kwargs)
             for ord in ords:
                 _order_place(**ord)
-                ce_or_pe = obj_sym.find_option_type(ord["symbol"])
-
-            if ce_or_pe and reduced_value < 0 and kwargs["trailing"][ce_or_pe]:
-                reduced_value = abs(reduced_value)
-                symbol = obj_sym.find_closest_premium(kwargs['quotes'],
-                                                      base["ADJUST_SEL_PREMIUM"],
-                                                      ce_or_pe)
-                symbol = obj_sym.find_symbol_in_moneyness(symbol,
-                                                          ce_or_pe,
-                                                          price_type="OTM")
-                quantity = round_val_to_qty(
-                    reduced_value,
-                    kwargs["quotes"][symbol],
-                    base['LOT_SIZE']
-                )
-                if quantity > 0:
-                    args = dict(
-                        symbol=symbol,
-                        quantity=quantity,
-                        side="S",
-                        tag=tag
-                    )
-                    _order_place(**args)
-                    kwargs = _log_and_show(
-                        f"{tag} {reduced_value=} in {symbol} {quantity}q",
-                        kwargs)
+                kwargs = _log_and_show(
+                    f"{tag} covering {ord['symbol']}",
+                    kwargs)
+            if reduced_value < 0:
+                kwargs["trailing"][ce_or_pe] = abs(reduced_value)
+                find_symbol_and_sell(kwargs, ce_or_pe, tag)
             kwargs = _update_metrics(**kwargs)
         # level 4
         elif kwargs["quantity"]["sell"] >= base["ADJUST_MAX_QTY"]:
@@ -633,7 +550,6 @@ def adjust(**kwargs):
                 tag=tag
             )
             _order_place(**args)
-
             kwargs = _log_and_show(
                 f"{tag} {symbol} for {amount}",
                 kwargs)
@@ -667,7 +583,7 @@ SYMBOL = common["base"]
 profit_val = base["ENTRY_PERC"] * 2 / 100 * base["MAX_QTY"] * base["LOT_SIZE"]
 kwargs = {
     "quotes": {},
-    "trailing": {"trailing": 0, "C": False, "P": False, "profit_val": profit_val},
+    "trailing": {"trailing": 0, "C": 0, "P": 0, "profit_val": profit_val},
     "perc": {"perc": "perc"},
     "adjust": {"adjust": 0, "max_qty": base['ADJUST_MAX_QTY']},
     "positions": [],
