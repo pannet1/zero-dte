@@ -289,7 +289,7 @@ def _update_metrics(**kwargs):
         if re.search(re.escape(base["EXPIRY"] + "P"), pos["symbol"])
         and pos["quantity"] < 0
     )
-    diff = call_value + put_value
+    diff = call_value - put_value
     ratio = 0 if sell_value == 0 else diff / sell_value
     kwargs["adjust"].update({
         "call_value": call_value,
