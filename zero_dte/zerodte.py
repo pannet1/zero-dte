@@ -76,28 +76,18 @@ def _hl_cls(brkr, quantity: Dict) -> Dict:
     hi = quantity.get("hi", 0)
     lo = quantity.get("lo", 0)
     keys = ["h", "l", "lp"]
-    if isinstance(brkr, Finvasia):
-        sleep(slp)
-        resp = brkr.finvasia.get_quotes(
-            dct_sym[SYMBOL]["exch"], dct_sym[SYMBOL]["token"])
-        # check if keys exists in the json resp
-        if resp and all(key in resp for key in keys):
-            hi = int(float(resp["h"]))
-            lo = int(float(resp["l"]))
-        quantity["is_new"] = 1 if hi > quantity.get(
-            "hi", hi) else quantity["is_new"]
-        quantity["is_new"] = -1 \
-            if lo < quantity.get("lo", lo) else quantity["is_new"]
-        quantity['cl'] = int(float(resp["lp"]))
-    else:
-        quantity["hi"] = PAPER_ATM + 50
-        quantity["lo"] = PAPER_ATM - 50
-        quantity["cl"] = PAPER_ATM
-        quantity["is_new"] = 1 if hi > quantity.get(
-            "hi", hi) else quantity["is_new"]
-        quantity["is_new"] = -1 \
-            if lo < quantity.get("lo", lo) else quantity["is_new"]
-        quantity["atm"] = PAPER_ATM
+    sleep(slp)
+    resp = brkr.finvasia.get_quotes(
+        dct_sym[SYMBOL]["exch"], dct_sym[SYMBOL]["token"])
+    # check if keys exists in the json resp
+    if resp and all(key in resp for key in keys):
+        hi = int(float(resp["h"]))
+        lo = int(float(resp["l"]))
+    quantity["is_new"] = 1 if hi > quantity.get(
+        "hi", hi) else quantity["is_new"]
+    quantity["is_new"] = -1 \
+        if lo < quantity.get("lo", lo) else quantity["is_new"]
+    quantity['cl'] = int(float(resp["lp"]))
     quantity["atm"] = obj_sym.get_atm(quantity["cl"])
     return quantity
 
@@ -114,6 +104,8 @@ def _order_place(**args):
                 last_price, dir * common["buff_perc"], 0.05)
         args["exchange"] = base['EXCHANGE']
         args["disclosed_quantity"] = args["quantity"]
+        if isinstance(brkr, Paper) and not args.get("price", None):
+            args["price"] = kwargs["quotes"][args["symbol"]]
         brkr.order_place(**args)
         file_to_append = data + "orders.json"
         _append_to_json(args, file_to_append)
@@ -208,10 +200,10 @@ def _update_metrics(**kwargs):
     quantity = kwargs["quantity"]
     try:
         quantity = _hl_cls(brkr, quantity)
+        quantity["straddle"] = obj_sym.calc_straddle_value(
+            quantity["atm"], kwargs["quotes"])
     except Exception as e:
         logging.debug(f"{e} unable to get atm price")
-    quantity["straddle"] = obj_sym.calc_straddle_value(
-        quantity["atm"], kwargs["quotes"])
     kwargs = _positions(**kwargs)
     kwargs = _allowed_lot(**kwargs)
 
@@ -560,25 +552,22 @@ def adjust(**kwargs):
 def get_brkr_and_wserver():
     if common["live"]:
         brkr = Finvasia(**cnfg)
-        if not brkr.authenticate():
-            logging.error("Failed to authenticate")
-            sys.exit(0)
-        else:
-            kwargs["quantity"] = _hl_cls(brkr, kwargs["quantity"])
-            atm = obj_sym.get_atm(kwargs["quantity"]["cl"])
-            dct_tokens = obj_sym.get_tokens(atm)
-            lst_tokens = list(dct_tokens.keys())
-            wserver = Wserver(brkr, lst_tokens, dct_tokens)
     else:
-        dct_tokens = obj_sym.get_tokens(PAPER_ATM)
-        lst_tokens = list(dct_tokens.keys())
-        brkr = Paper(lst_tokens, dct_tokens)
-        wserver = brkr
+        brkr = Paper(**cnfg)
+
+    if not brkr.authenticate():
+        logging.error("Failed to authenticate")
+        sys.exit(0)
+
+    kwargs["quantity"] = _hl_cls(brkr, kwargs["quantity"])
+    atm = obj_sym.get_atm(kwargs["quantity"]["cl"])
+    dct_tokens = obj_sym.get_tokens(atm)
+    lst_tokens = list(dct_tokens.keys())
+    wserver = Wserver(brkr, lst_tokens, dct_tokens)
     return brkr, wserver
 
 
 slp = 1
-PAPER_ATM = 47100
 SYMBOL = common["base"]
 profit_val = base["ENTRY_PERC"] * 2 / 100 * base["MAX_QTY"] * base["LOT_SIZE"]
 kwargs = {
