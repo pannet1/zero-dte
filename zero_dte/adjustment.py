@@ -73,3 +73,28 @@ def close_profiting_position(positions, target_value: int,
             )
             return val_for_this, pos
     return 0, {}
+
+
+if __name__ == "__main__":
+
+    # Sample data
+    sample_data = [
+        {"symbol": "BANKNIFTY14FEB24C24500", "quantity": 50,
+            "last_price": 333.12, "value": -2000},
+        {"symbol": "BANKNIFTY14FEB24P25500", "quantity": -
+            500, "last_price": 300, "value": -150000},
+        {"symbol": "BANKNIFTY14FEB24C26600", "quantity": 500,
+            "last_price": 111.01, "value": 1800},
+        {"symbol": "BANKNIFTY14FEB24P27000", "quantity": 500,
+            "last_price": 111.03, "value": -5000},
+    ]
+    target_value = 1000
+
+    val, pos = adjust_highest_ltp(sample_data, target_value, "C", "test")
+    print(f'{val = }, "\n", {pos = }')
+
+    val, pos = reduce_value(sample_data, target_value, "C", "test")
+    print(f'{val = }, "\n", {pos = }')
+
+    val, pos = close_profiting_position(sample_data, target_value, "test")
+    print(f'{val = }, "\n", {pos = }')
