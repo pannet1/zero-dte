@@ -6,7 +6,7 @@ from paper import Paper
 from symbols import Symbols, dct_sym
 from utilities.printutils import prettier
 from utilities.digits import Digits
-from utilities.utils import adjust_ltp, round_val_to_qty
+from utilities.utils import adjust_ltp, val_to_qty
 from adjustment import adjust_highest_ltp, reduce_value, is_above_highest_ltp, close_profiting_position
 import pendulum as pdlm
 from time import sleep
@@ -393,10 +393,11 @@ def close_profit_position(**kwargs):
             symbol = obj_sym.find_symbol_in_moneyness(symbol,
                                                       ce_or_pe,
                                                       price_type="ITM")
-            quantity = round_val_to_qty(
+            quantity = val_to_qty(
                 value_for_this,
                 kwargs["quotes"][symbol],
-                base['LOT_SIZE']
+                base['LOT_SIZE'],
+                int,
             )
             quantity = max(quantity, base['LOT_SIZE'])
             args = dict(
@@ -430,10 +431,11 @@ def find_symbol_and_sell(kwargs, ce_or_pe, tag: str):
     symbol = obj_sym.find_closest_premium(kwargs['quotes'],
                                           base["ADJUST_SEL_PREMIUM"],
                                           ce_or_pe)
-    quantity = round_val_to_qty(
+    quantity = val_to_qty(
         kwargs["trailing"][ce_or_pe],
         kwargs["quotes"][symbol],
-        base['LOT_SIZE']
+        base['LOT_SIZE'],
+        int,
     )
     if quantity > 0:
         tag = f"{tag}: sold {symbol} {quantity}q"
@@ -529,10 +531,11 @@ def adjust(**kwargs):
             symbol = obj_sym.find_closest_premium(kwargs['quotes'],
                                                   base["ADJUST_SEL_PREMIUM"],
                                                   ce_or_pe)
-            quantity = round_val_to_qty(
+            quantity = val_to_qty(
                 amount,
                 kwargs["quotes"][symbol],
-                base['LOT_SIZE']
+                base['LOT_SIZE'],
+                round,
             )
             quantity = max(quantity, base["LOT_SIZE"])
             args = dict(

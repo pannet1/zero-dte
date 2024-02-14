@@ -1,3 +1,4 @@
+from typing import Callable
 import unittest
 from decimal import Decimal, ROUND_HALF_EVEN
 
@@ -15,10 +16,24 @@ def calc_m2m(pos):
 def round_val_to_qty(
     val: int, ltp: float, base_lot: int
 ):
+    """
+        removed from zero_dte
+    """
     if ltp == 0:
         ltp = 0.05
     qty = val / ltp
     lot = round(qty / base_lot)
+    qty = lot * base_lot
+    return qty
+
+
+def val_to_qty(
+    val: int, ltp: float, base_lot: int, calc_method: Callable
+):
+    if ltp == 0:
+        ltp = 0.05
+    val_per_ltp = val / ltp
+    lot = calc_method(val_per_ltp / base_lot)
     qty = lot * base_lot
     return qty
 

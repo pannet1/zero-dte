@@ -94,7 +94,7 @@ if __name__ == "__main__":
     print(f'{val = }, "\n", {pos = }')
 
     val, pos = reduce_value(sample_data, target_value, "C", "test")
-    print(f'{val = }, "\n", {pos = }')
+    print(f'reduce value {val = }, "\n", {pos = }')
 
     val, pos = close_profiting_position(sample_data, target_value, "test")
     print(f'{val = }, "\n", {pos = }')
