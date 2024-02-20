@@ -15,6 +15,7 @@ import os
 import json
 import sys
 from typing import Dict
+import math
 
 
 def log_rotate():
@@ -63,7 +64,8 @@ def _now() -> str:
 
 def _save_file(kwargs):
     fname = _now()
-    fils.save_file(kwargs, data + fname)
+    fils.write_file(kwargs, data + fname)
+    fils.write_file(data + fname + ".json", kwargs)
 
 
 def _reset_trail(**kwargs):
@@ -377,8 +379,8 @@ def toggle_pyramid(**kwargs):
 def close_profit_position(**kwargs):
     kwargs["portfolio"]["fn"] = is_portfolio_stop
     tag = "close_profit_position"
-    value_for_this, pos = close_profiting_position(
-        kwargs["positions"], kwargs["trailing"]["profit_val"], tag)
+    value_to_reduce, pos = close_profiting_position(
+        kwargs["positions"], tag)
     if any(pos):
         _order_place(**pos)
         # find option to cover
@@ -386,20 +388,16 @@ def close_profit_position(**kwargs):
             f"{tag} covering {pos['symbol']} {pos['quantity']}",
             kwargs)
         ce_or_pe = obj_sym.find_option_type(pos["symbol"])
-        if ce_or_pe and value_for_this > 0:
+        if ce_or_pe:
             symbol = obj_sym.find_closest_premium(kwargs['quotes'],
                                                   base["ADJUST_SEL_PREMIUM"],
                                                   ce_or_pe)
-            symbol = obj_sym.find_symbol_in_moneyness(symbol,
-                                                      ce_or_pe,
-                                                      price_type="ITM")
             quantity = val_to_qty(
-                value_for_this,
+                value_to_reduce,
                 kwargs["quotes"][symbol],
                 base['LOT_SIZE'],
-                int,
+                math.ceil,
             )
-            quantity = max(quantity, base['LOT_SIZE'])
             args = dict(
                 symbol=symbol,
                 quantity=quantity,
@@ -408,7 +406,7 @@ def close_profit_position(**kwargs):
             )
             _order_place(**args)
             kwargs = _log_and_show(
-                f"{tag}: {value_for_this} in new {symbol} {quantity}",
+                f"{tag}: {value_to_reduce} in new {symbol} {quantity}",
                 kwargs)
         kwargs = _update_metrics(**kwargs)
     return kwargs

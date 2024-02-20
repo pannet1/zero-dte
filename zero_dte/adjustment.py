@@ -59,8 +59,7 @@ def is_above_highest_ltp(positions, contains: Literal["C", "P"]) -> bool:
     return False
 
 
-def close_profiting_position(positions, target_value: int,
-                             tag: str) -> Tuple[int, Dict]:
+def close_profiting_position(positions, tag: str) -> Tuple[int, Dict]:
     for entry in positions:
         if (
             entry["quantity"] < 0 and
@@ -68,9 +67,13 @@ def close_profiting_position(positions, target_value: int,
                 re.escape(base["EXPIRY"]), entry["symbol"])
             and entry["last_price"] < base["COVER_FOR_PROFIT"]
         ):
-            val_for_this, pos = get_val_and_pos(
-                entry, target_value, base['LOT_SIZE'], tag
-            )
+            qty = abs(entry["quantity"])
+            val_for_this = base['LOT_SIZE'] * entry["last_price"] * qty
+            pos = {}
+            pos["symbol"] = entry["symbol"]
+            pos["quantity"] = qty
+            pos["side"] = "B"
+            pos["tag"] = tag
             return val_for_this, pos
     return 0, {}
 
