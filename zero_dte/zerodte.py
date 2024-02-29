@@ -19,6 +19,7 @@ import math
 
 
 def log_rotate():
+    lst_kwargs = []
     files = fils.get_files_with_extn("json", data)
     files = [file.split(".")[0] for file in files]
     files = [file for file in files
@@ -27,9 +28,12 @@ def log_rotate():
         pathfile = data + str(file) + ".json"
         if fils.is_file_not_2day(pathfile):
             fils.del_file(pathfile)
+        else:
+            lst_kwargs = fils.read_file(pathfile)
     pathfile = data + "orders.json"
     if fils.is_file_not_2day(pathfile):
         fils.nuke_file(pathfile)
+    return lst_kwargs
 
 
 def _log_and_show(text, kwargs):
@@ -390,7 +394,7 @@ def close_profit_position(**kwargs):
         ce_or_pe = obj_sym.find_option_type(pos["symbol"])
         if ce_or_pe:
             symbol = obj_sym.find_closest_premium(kwargs['quotes'],
-                                                  base["ADJUST_SEL_PREMIUM"],
+                                                  base["SELL_COVERED"],
                                                   ce_or_pe)
             quantity = val_to_qty(
                 value_to_reduce,
@@ -568,7 +572,7 @@ def get_brkr_and_wserver():
     return brkr, wserver
 
 
-slp = 1
+slp = 2
 SYMBOL = common["base"]
 profit_val = base["ENTRY_PERC"] * 2 / 100 * base["MAX_QTY"] * base["LOT_SIZE"]
 kwargs = {
@@ -598,6 +602,9 @@ kwargs = _allowed_lot(**kwargs)
 kwargs = _pyramid(**kwargs)
 kwargs["portfolio"]["fn"] = is_pyramid_cond
 while kwargs['portfolio'].get("fn", "PACK_AND_GO") != "PACK_AND_GO":
-    kwargs = prettier(**kwargs)
-    next_func = kwargs["portfolio"].pop("fn")
-    kwargs = next_func(**kwargs)
+    try:
+        kwargs = prettier(**kwargs)
+        next_func = kwargs["portfolio"].pop("fn")
+        kwargs = next_func(**kwargs)
+    except Exception as e:
+        print(e)

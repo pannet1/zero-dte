@@ -28,7 +28,6 @@ class Paper(Finvasia):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._orders = pd.DataFrame()
-        #
 
     @property
     def orders(self):
@@ -49,37 +48,37 @@ class Paper(Finvasia):
                 [self._orders, pd.DataFrame([args])], ignore_index=True)
         else:
             self._orders = pd.DataFrame(columns=self.cols, data=[args])
-        self._orders = pd.concat(
-            [self._orders, pd.DataFrame([args])], ignore_index=True)
 
     @property
     def positions(self):
+        lst = []
         df = self.orders
-        df_buy = df[df.side == "B"][[
-            "symbol", "filled_quantity", "average_price"]]
-        df_sell = df[df.side == "S"][[
-            "symbol", "filled_quantity", "average_price"]]
-        df = pd.merge(df_buy, df_sell,
-                      on="symbol",
-                      suffixes=("_buy", "_sell"),
-                      how="outer"
-                      ).fillna(0)
-        df["bought"] = df.filled_quantity_buy * df.average_price_buy
-        df["sold"] = df.filled_quantity_sell * df.average_price_sell
-        df["quantity"] = df.filled_quantity_buy - df.filled_quantity_sell
-        df = df.groupby("symbol").sum().reset_index()
-        lst = df.to_dict(orient="records")
-        for pos in lst:
-            token = self.instrument_symbol(base["EXCHANGE"], pos["symbol"])
-            resp = self.scriptinfo(base["EXCHANGE"], token)
-            pos["last_price"] = float(resp["lp"])
-            pos["urmtom"] = pos["quantity"]
-            pos["urmtom"] = calc_m2m(pos)
-            pos["rpnl"] = (pos["sold"] - pos["bought"]
-                           ) if pos["quantity"] == 0 else 0
-        keys = ['symbol', 'quantity', 'urmtom', 'rpnl', 'last_price']
-        lst = [
-            {k: d[k] for k in keys} for d in lst]
+        if not self.orders.empty:
+            df_buy = df[df.side == "B"][[
+                "symbol", "filled_quantity", "average_price"]]
+            df_sell = df[df.side == "S"][[
+                "symbol", "filled_quantity", "average_price"]]
+            df = pd.merge(df_buy, df_sell,
+                          on="symbol",
+                          suffixes=("_buy", "_sell"),
+                          how="outer"
+                          ).fillna(0)
+            df["bought"] = df.filled_quantity_buy * df.average_price_buy
+            df["sold"] = df.filled_quantity_sell * df.average_price_sell
+            df["quantity"] = df.filled_quantity_buy - df.filled_quantity_sell
+            df = df.groupby("symbol").sum().reset_index()
+            lst = df.to_dict(orient="records")
+            for pos in lst:
+                token = self.instrument_symbol(base["EXCHANGE"], pos["symbol"])
+                resp = self.scriptinfo(base["EXCHANGE"], token)
+                pos["last_price"] = float(resp["lp"])
+                pos["urmtom"] = pos["quantity"]
+                pos["urmtom"] = calc_m2m(pos)
+                pos["rpnl"] = (pos["sold"] - pos["bought"]
+                               ) if pos["quantity"] == 0 else 0
+            keys = ['symbol', 'quantity', 'urmtom', 'rpnl', 'last_price']
+            lst = [
+                {k: d[k] for k in keys} for d in lst]
         return lst
 
 
