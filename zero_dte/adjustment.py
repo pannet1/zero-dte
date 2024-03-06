@@ -1,5 +1,5 @@
 from typing import Literal, Tuple, Dict
-from constants import base
+from constants import base, common
 from utilities.list_of_dict import sort, get_val_and_pos
 import re
 
@@ -68,7 +68,7 @@ def close_profiting_position(positions, tag: str) -> Tuple[int, Dict]:
             and entry["last_price"] < base["COVER_FOR_PROFIT"]
         ):
             qty = abs(entry["quantity"])
-            val_for_this = base['LOT_SIZE'] * entry["last_price"] * qty
+            val_for_this = entry["last_price"] * qty
             pos = {}
             pos["symbol"] = entry["symbol"]
             pos["quantity"] = qty
@@ -80,17 +80,20 @@ def close_profiting_position(positions, tag: str) -> Tuple[int, Dict]:
 
 if __name__ == "__main__":
 
+    symbol = common["base"]
+    expiry = base["EXPIRY"]
     # Sample data
     sample_data = [
-        {"symbol": "BANKNIFTY14FEB24C24500", "quantity": 50,
-            "last_price": 333.12, "value": -2000},
-        {"symbol": "BANKNIFTY14FEB24P25500", "quantity": -
+        {"symbol": f'{symbol}{expiry}C24500', "quantity": 50,
+            "last_price": 300, "value": -6000},
+        {"symbol": f'{symbol}{expiry}P25500', "quantity": -
             500, "last_price": 300, "value": -150000},
-        {"symbol": "BANKNIFTY14FEB24C26600", "quantity": 500,
+        {"symbol": f'{symbol}{expiry}C26600', "quantity": 500,
             "last_price": 111.01, "value": 1800},
-        {"symbol": "BANKNIFTY14FEB24P27000", "quantity": 500,
-            "last_price": 111.03, "value": -5000},
+        {"symbol": f'{symbol}{expiry}P27000', "quantity": -500,
+            "last_price": 5, "value": -2500},
     ]
+    print(sample_data)
     target_value = 1000
 
     val, pos = adjust_highest_ltp(sample_data, target_value, "C", "test")
@@ -99,5 +102,6 @@ if __name__ == "__main__":
     val, pos = reduce_value(sample_data, target_value, "C", "test")
     print(f'reduce value {val = }, "\n", {pos = }')
 
-    val, pos = close_profiting_position(sample_data, target_value, "test")
-    print(f'{val = }, "\n", {pos = }')
+    print(base["COVER_FOR_PROFIT"])
+    val, pos = close_profiting_position(sample_data, "test")
+    print(f'close close_profiting_position{val = }, "\n", {pos = }')

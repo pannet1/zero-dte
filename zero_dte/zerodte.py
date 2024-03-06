@@ -394,7 +394,7 @@ def close_profit_position(**kwargs):
         ce_or_pe = obj_sym.find_option_type(pos["symbol"])
         if ce_or_pe:
             symbol = obj_sym.find_closest_premium(kwargs['quotes'],
-                                                  base["SELL_COVERED"],
+                                                  base["SELL_NEW_PROFIT"],
                                                   ce_or_pe)
             quantity = val_to_qty(
                 value_to_reduce,
@@ -410,7 +410,7 @@ def close_profit_position(**kwargs):
             )
             _order_place(**args)
             kwargs = _log_and_show(
-                f"{tag}: {value_to_reduce} in new {symbol} {quantity}",
+                f"{tag}: sold {symbol} {quantity}q",
                 kwargs)
         kwargs = _update_metrics(**kwargs)
     return kwargs
@@ -506,7 +506,7 @@ def adjust(**kwargs):
             for ord in ords:
                 _order_place(**ord)
                 kwargs = _log_and_show(
-                    f"{tag} covering {ord['symbol']}",
+                    f"{tag} covering {ord['symbol']}{ord['quantity']}q",
                     kwargs)
             if reduced_value < 0:
                 kwargs["trailing"][ce_or_pe] = abs(reduced_value)
