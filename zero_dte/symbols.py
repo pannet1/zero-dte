@@ -32,6 +32,20 @@ dct_sym = {
         "token": "26037",
         "depth": 16,
     },
+    "SENSEX": {
+        "diff": 100,
+        "index": "BSE Sensex 50",
+        "exch": "BSE",
+        "token": "1",
+        "depth": 16,
+    },
+    "BANKEX": {
+        "diff": 100,
+        "index": "BSE Bankex",
+        "exch": "BSE",
+        "token": "12",
+        "depth": 16,
+    }
 }
 
 
@@ -163,6 +177,6 @@ class Symbols:
 
 
 if __name__ == "__main__":
-    symbols = Symbols("NFO", "BANKNIFTY", "28DEC23")
+    symbols = Symbols("BSE", "SENSEX", "29MAR24")
     symbols.get_exchange_token_map_finvasia()
-    print(symbols.find_option_type("BANKNIFTY28DEC23C47000"))
+    # print(symbols.find_option_type("BANKNIFTY28DEC23C47000"))

@@ -85,16 +85,17 @@ def _hl_cls(brkr, quantity: Dict) -> Dict:
     sleep(slp)
     resp = brkr.finvasia.get_quotes(
         dct_sym[SYMBOL]["exch"], dct_sym[SYMBOL]["token"])
+    print(resp)
     # check if keys exists in the json resp
     if resp and all(key in resp for key in keys):
         hi = int(float(resp["h"]))
         lo = int(float(resp["l"]))
-    quantity["is_new"] = 1 if hi > quantity.get(
-        "hi", hi) else quantity["is_new"]
-    quantity["is_new"] = -1 \
-        if lo < quantity.get("lo", lo) else quantity["is_new"]
-    quantity['cl'] = int(float(resp["lp"]))
-    quantity["atm"] = obj_sym.get_atm(quantity["cl"])
+        quantity["is_new"] = 1 if hi > quantity.get(
+            "hi", hi) else quantity["is_new"]
+        quantity["is_new"] = -1 \
+            if lo < quantity.get("lo", lo) else quantity["is_new"]
+        quantity['cl'] = int(float(resp["lp"]))
+        quantity["atm"] = obj_sym.get_atm(quantity["cl"])
     return quantity
 
 
